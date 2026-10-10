@@ -1,0 +1,94 @@
+{
+  "_readme": "别名映射表。复制本文件为 favorites.json 后自定义。这里的 name 必须与麦当劳菜单真实品名一致（本项目拿工程技术实测过），否则别名查不到目标。",
+  "version": 1,
+  "defaultStore": "福田香梅北",
+  "stores": [
+    {
+      "alias": ["福田香梅北", "香梅北", "xmbei", "xmB"],
+      "name": "麦当劳深圳香梅北餐厅",
+      "city": "深圳",
+      "note": "常去门店，storeCode 1420602"
+    },
+    {
+      "alias": ["梅林路", "梅林", "zuolin"],
+      "name": "麦当劳深圳梅林路餐厅",
+      "city": "深圳",
+      "note": "备选门店"
+    },
+    {
+      "alias": ["景田", "jingtian"],
+      "name": "麦当劳深圳景田餐厅",
+      "city": "深圳",
+      "note": "备选门店"
+    }
+  ],
+  "meals": [
+    {
+      "alias": ["巨无霸", "巨无霸单汉堡", "jwb", "bigmac"],
+      "name": "巨无霸",
+      "qty": 1,
+      "spec": "不要酸黄瓜",
+      "note": "只要汉堡，不要套餐"
+    },
+    {
+      "alias": ["麦辣鸡腿堡", "麦辣堡", "mljtb", "麦辣"],
+      "name": "麦辣鸡腿汉堡",
+      "qty": 1,
+      "spec": "",
+      "note": "菜单真实品名是「麦辣鸡腿汉堡」"
+    },
+    {
+      "alias": ["板烧", "板烧堡", "banshao"],
+      "name": "板烧鸡腿堡",
+      "qty": 1,
+      "spec": "",
+      "note": ""
+    },
+    {
+      "alias": ["薯条", "大薯", "shutiao", "fries"],
+      "name": "薯条",
+      "qty": 1,
+      "spec": "",
+      "note": "菜单真实品名是「薯条」"
+    },
+    {
+      "alias": ["可乐", "大可乐", "kele", "cola"],
+      "name": "可乐",
+      "qty": 1,
+      "spec": "少冰",
+      "note": "菜单真实品名是「可乐」"
+    },
+    {
+      "alias": ["麦香鸡", "mxj"],
+      "name": "麦香鸡",
+      "qty": 1,
+      "spec": "",
+      "note": ""
+    }
+  ],
+  "combos": [
+    {
+      "alias": ["麦辣套餐", "辣堡三件套"],
+      "items": [
+        { "name": "麦辣鸡腿汉堡", "qty": 1 },
+        { "name": "薯条", "qty": 1 },
+        { "name": "可乐", "qty": 1 }
+      ],
+      "note": "工作日午饭固定搭配"
+    },
+    {
+      "alias": ["巨无霸三件套", "巨无霸套餐"],
+      "items": [
+        { "name": "巨无霸", "qty": 1 },
+        { "name": "薯条", "qty": 1 },
+        { "name": "可乐", "qty": 1 }
+      ],
+      "note": "菜单里本来就有「巨无霸三件套」这个正式商品，这里登记便于用短别名唤起"
+    }
+  ],
+  "rules": {
+    "defaultScene": "pickup",
+    "autoUseCoupons": true,
+    "requireConfirm": true
+  }
+}

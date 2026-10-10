@@ -1,0 +1,24 @@
+# 真实凭据一律不得入库 —— 参赛规则要求配置只能含环境变量占位符
+.env
+.env.*
+!.env.example
+
+# 用户的真实个人偏好（仓库只带 example）
+config/favorites.json
+
+node_modules/
+dist/
+build/
+coverage/
+
+# MCP 同步下来的真实门店/菜单/券数据可能含个人信息
+.cache/
+.cache/**
+data/live/
+state/
+*.session.json
+
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*

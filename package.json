@@ -1,0 +1,45 @@
+{
+  "name": "mcd-smart-order",
+  "version": "1.0.0",
+  "type": "module",
+  "private": false,
+  "description": "在微信里一句话下单麦当劳：预置喜爱门店与餐品，发送「巨无霸 香梅北」自动检索门店与菜单、算出真实应付价，确认后返回支付链接。基于麦当劳 MCP 构建。",
+  "keywords": [
+    "mcdonalds",
+    "mcp",
+    "model-context-protocol",
+    "wechat",
+    "official-account",
+    "smart-order",
+    "skill",
+    "workbuddy"
+  ],
+  "license": "MIT",
+  "author": "An61",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "bin": {
+    "mcd-smart-order": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/index.ts",
+    "serve": "node --experimental-strip-types src/index.ts serve",
+    "chat": "node --experimental-strip-types src/index.ts chat",
+    "demo": "node --experimental-strip-types src/index.ts chat --demo",
+    "tools": "node --experimental-strip-types src/index.ts tools",
+    "favorites": "node --experimental-strip-types src/index.ts favorites",
+    "order:manual": "node --experimental-strip-types src/index.ts order --i-know-this-creates-a-real-order",
+    "doctor": "node --experimental-strip-types src/index.ts doctor",
+    "check": "node --experimental-strip-types scripts/check-m1.ts && node --experimental-strip-types scripts/check-m2.ts && node --experimental-strip-types scripts/check-m3.ts && node --experimental-strip-types scripts/check-m4.ts",
+    "check:m1": "node --experimental-strip-types scripts/check-m1.ts",
+    "check:m2": "node --experimental-strip-types scripts/check-m2.ts",
+    "check:m3": "node --experimental-strip-types scripts/check-m3.ts",
+    "check:m4": "node --experimental-strip-types scripts/check-m4.ts",
+    "gen:sample": "node --experimental-strip-types scripts/gen-sample.ts",
+    "probe:chain": "node --experimental-strip-types scripts/probe-order-chain.ts",
+    "probe:scenes": "node --experimental-strip-types scripts/probe-order-chain2.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
