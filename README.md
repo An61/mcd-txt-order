@@ -1,4 +1,4 @@
-# mcd-smart-order
+# mcd-txt-order
 
 > 在微信里**一句话**下单麦当劳：预置喜爱的门店与餐品，发送「巨无霸 香梅北」，自动检索门店与菜单、算出真实应付价，确认后返回支付链接。
 >
@@ -32,8 +32,8 @@
 ### 不需要 Token 也能玩
 
 ```bash
-git clone https://github.com/An61/mcd-smart-order.git
-cd mcd-smart-order
+git clone https://github.com/An61/mcd-txt-order.git
+cd mcd-txt-order
 node --experimental-strip-types scripts/check-m1.ts   # 领域内核自检（60 项）
 node --experimental-strip-types scripts/check-m2.ts   # 安全与会话自检（83 项）
 ```

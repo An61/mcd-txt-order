@@ -1,4 +1,4 @@
-# PLAN.md — mcd-smart-order 技术方案
+# PLAN.md — mcd-txt-order 技术方案
 
 ---
 
@@ -41,7 +41,7 @@
 ## 2. 目录结构
 
 ```
-mcd-smart-order/
+mcd-txt-order/
 ├── SPEC.md                    需求规格
 ├── PLAN.md                    本文件
 ├── TASKS.md                   任务清单

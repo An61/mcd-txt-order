@@ -208,7 +208,7 @@ export class McpStreamableHttpClient {
     await this.request('initialize', {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: 'mcd-smart-order', version: '1.0.0' },
+      clientInfo: { name: 'mcd-txt-order', version: '1.0.0' },
     });
     await this.request(
       'notifications/initialized',

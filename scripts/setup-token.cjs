@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const tokenPath = 'C:/Users/安/Desktop/Mcdonald Token.txt';
+// 项目根目录按脚本位置推导，不再写死绝对路径 —— 以后再改项目名/挪目录也不会失效
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+
+const tokenPath = process.argv[2] || 'C:/Users/安/Desktop/Mcdonald Token.txt';
 const token = fs.readFileSync(tokenPath, 'utf8').trim();
 
 if (!token) throw new Error('Token 文件为空');
@@ -30,7 +33,7 @@ fs.writeFileSync(mcpPath, JSON.stringify(cfg, null, 2), 'utf8');
 console.log('已写入:', mcpPath, '| servers:', Object.keys(cfg.mcpServers).join(', '));
 
 // 2) 写入项目 .env（已 gitignore）
-const envPath = 'C:/Users/安/WorkBuddy/Worktrees/McDonald/main-eb4c1909/mcd-smart-order/.env';
+const envPath = path.join(PROJECT_ROOT, '.env');
 let env = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 const line = `MCD_MCP_TOKEN=${token}`;
 if (/^MCD_MCP_TOKEN=.*$/m.test(env)) {
@@ -44,7 +47,7 @@ fs.writeFileSync(envPath, env, 'utf8');
 console.log('已写入:', envPath, '| 行数:', env.trim().split(/\r?\n/).length);
 
 // 3) 校验 .gitignore 确实排除了 .env
-const gi = 'C:/Users/安/WorkBuddy/Worktrees/McDonald/main-eb4c1909/mcd-smart-order/.gitignore';
+const gi = path.join(PROJECT_ROOT, '.gitignore');
 if (fs.existsSync(gi)) {
   const lines = fs.readFileSync(gi, 'utf8').split(/\r?\n/).map(s => s.trim());
   const ignored = lines.includes('.env') || lines.includes('.env.*');

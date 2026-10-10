@@ -9,15 +9,15 @@
 ## 标题（自定义）
 
 ```
-【参赛申请】mcd-smart-order —— 微信里一句话下单麦当劳
+【参赛申请】mcd-txt-order —— 微信里一句话下单麦当劳
 ```
 
 ## 正文（复制以下内容）
 
 ```
 【参赛申请】
-项目名称：mcd-smart-order 麦当劳一句话点餐助手
-项目地址：https://github.com/An61/mcd-smart-order
+项目名称：mcd-txt-order 麦当劳一句话点餐助手
+项目地址：https://github.com/An61/mcd-txt-order
 项目简介：
 
 基于麦当劳官方 MCP（https://mcp.mcd.cn）开发的微信公众号点餐助手。用户预置喜爱的门店与餐品后，发送「巨无霸 香梅北」这类短句，即可自动完成门店检索、菜单匹配、实时算价，回复「确认」后返回支付链接。

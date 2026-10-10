@@ -1,5 +1,5 @@
 {
-  "name": "mcd-smart-order",
+  "name": "mcd-txt-order",
   "version": "1.0.0",
   "type": "module",
   "private": false,
@@ -20,7 +20,7 @@
     "node": ">=22.6.0"
   },
   "bin": {
-    "mcd-smart-order": "./src/index.ts"
+    "mcd-txt-order": "./src/index.ts"
   },
   "scripts": {
     "start": "node --experimental-strip-types src/index.ts",

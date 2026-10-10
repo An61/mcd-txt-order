@@ -27,7 +27,7 @@ type Command = 'tools' | 'favorites' | 'doctor' | 'chat' | 'serve' | 'order' | '
 
 function printHelp(): void {
   console.log(`
-mcd-smart-order —— 微信里一句话下单麦当劳
+mcd-txt-order —— 微信里一句话下单麦当劳
 
   npm run tools        列出 MCP 当前真实提供的全部工具
   npm run favorites    查看已配置的门店/餐品别名

@@ -2,7 +2,7 @@
 
 > WorkBuddy 对话上下文导出 —— 用于核验本项目是否有 WorkBuddy 参与开发。
 > 导出时间：2026-10-10
-> 项目：`mcd-smart-order`（麦当劳智能点餐助手）
+> 项目：`mcd-txt-order`（麦当劳智能点餐助手）
 
 ---
 
