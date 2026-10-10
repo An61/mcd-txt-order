@@ -8,21 +8,24 @@
 
 | 区域 | 文件数 | 作用 |
 |---|---:|---|
-| `src/domain` | 8 | 纯领域模型、文本/数量解析、匹配、收藏、会话、意图 |
-| `src/mcp` | 3 | MCP Streamable HTTP 客户端、响应归一化、营养数据解析 |
+| `src/domain` | 9 | 领域类型、订单流程、文本/数量解析、匹配、收藏、会话、意图 |
+| `src/mcp` | 4 | MCP 客户端、gateway、归一化、营养解析 |
+| `src/channel` | 4 | 对话核心、微信 HTTP 服务、XML/客服消息、消息去重 |
 | `src/safety` | 2 | HMAC 确认令牌、幂等/冷却/限额/鉴权失败守卫 |
 | `src/data` | 1 | 真实探针快照生成的离线示例数据 |
-| `scripts` | 8 | M1/M2 离线自检、探针、样例生成与 Token 配置 |
-| 文档/配置 | 15 | 规格、计划、审计、微信方案、示例配置 |
-| `.cache/probe` | 25 | MCP 只读探针快照；不属于运行时模块 |
+| `scripts` | 9 | M1–M4 自检、探针、样例生成与 Token 配置 |
+| 文档/配置与索引 | 25 | 规格、计划、审计、微信方案、示例配置、CodeGraph |
 
 ## 2. 模块图
 
 ```mermaid
 flowchart TD
-  CLI[package.json scripts / 缺失的 src/index.ts] --> DOMAIN
+  CLI[src/index.ts CLI] --> CORE
   CLI --> MCP
   CLI --> SAFETY
+  SERVER[src/channel/server.ts HTTP] --> CORE
+  SERVER --> WECHAT[src/channel/wechat.ts XML + 客服消息]
+  SERVER --> DEDUPE[src/channel/dedupe.ts MsgId 去重]
   SCRIPTS[scripts/check-m1,m2 + probes] --> ENV[src/env.ts]
   SCRIPTS --> DOMAIN
   SCRIPTS --> MCP
@@ -37,6 +40,7 @@ flowchart TD
     INTENT[intent.ts\n7 类意图]
     SESSION[session.ts\nidle→clarifying→confirming→placed]
     MOD[modification.ts\n特制项构建]
+    ORDERFLOW[orderFlow.ts\n解析/检索/算价/预览]
     TEXT --> QTY
     TEXT --> MATCH
     TEXT --> FAV
@@ -49,10 +53,22 @@ flowchart TD
 
   subgraph MCP[mcp]
     CLIENT[client.ts\nJSON/SSE MCP HTTP]
+    GATEWAY[gateway.ts\nReal/Sample DataGateway]
     NORMALIZE[normalize.ts\nEnvelope/门店/菜单/价格/订单/指纹]
     NUTRITION[nutrition.ts\nMarkdown营养解析]
     TYPES --> NORMALIZE
     TYPES --> NUTRITION
+    GATEWAY --> CLIENT
+    GATEWAY --> NORMALIZE
+  end
+
+  subgraph CHANNEL[channel]
+    CORE[core.ts\nConversationCore]
+    CORE --> ORDERFLOW
+    CORE --> GATEWAY
+    CORE --> SESSION
+    CORE --> CONF
+    CORE --> GUARD
   end
 
   subgraph SAFETY[safety]
@@ -104,45 +120,41 @@ src/data/sample.ts
 ## 4. 运行时主流程
 
 ```text
-用户文本
-  → intent.classifyIntent
-  → favorites.resolveStoreAlias / qty.parseItemSpecs
-  → matcher.resolveItemText / pickOne
-  → MCP query-nearby-stores
-  → MCP query-meals
-  → （特制）query-meal-detail + modification.buildModification
-  → normalize.parsePrice
-  → session.toConfirming
-  → confirmation.issue / guard.evaluate
+用户文本 → ChannelServer / CLI → ConversationCore.handle
+  → classifyIntent
+  → buildPreview（门店/餐品匹配 → DataGateway 查询 → 特制详情 → 算价）
+  → issue 确认令牌 → SessionStore.toConfirming
   → 用户显式确认
-  → confirmation.consume / guard.begin
-  → MCP create-order（当前源码未见编排入口）
-  → guard.succeed 或 guard.fail
-  → session.toPlaced / toIdle
+  → consume 令牌 → OrderGuard.evaluate + begin
+  → DataGateway.createOrder
+  → guard.succeed / fail → SessionStore.toPlaced / idle
+
+微信入口：签名校验 → XML 解析 → MsgId（或 FromUserName+CreateTime）去重 → 5 秒回复时限；超时先回 success，再尝试客服消息异步推送。
 ```
 
 金额边界：菜单价格经 `centsFromYuanString` 转为分；算价结果经 `centsFromCentsInt` 保持分；领域层统一使用 `*Cents`。
 
 ## 5. 当前结构性发现
 
-1. 已补上 `src/index.ts`、`src/channel/core.ts`、`src/domain/orderFlow.ts`、`src/mcp/gateway.ts` 等入口与编排模块；原先“没有产品入口/编排层”的断点已关闭。
-2. 运行链现为 `src/index.ts` → `ConversationCore` → `buildPreview` / `DataGateway`，MCP 与 Sample Gateway 都通过同一领域接口提供数据。
-3. 下单链已在 `ConversationCore` 接入：预览时签发令牌并进入确认态；确认时调用 `OrderGuard` 和 gateway，成功后完成会话迁移，失败不自动重试。
-4. `src/domain`、`src/mcp`、`src/safety` 仍由离线自检脚本直接验证；CodeGraph 检索到 MCP client 现有 20 个调用点（探针与运行模块）。
-5. `.env` 存在于工作树，未在本图中读取或展开；应继续保持凭据不进入文档、日志或版本控制。
+1. 当前项目目录为 `mcd-txt-order`；此前的 `mcd-smart-order` 目录现已为空。该新工作树包含 `src/channel/server.ts`、`src/channel/wechat.ts`、`src/channel/dedupe.ts` 等微信接入模块。
+2. 微信服务已接入签名验证、XML 解析、消息去重与 5 秒被动回复超时处理；读取代码并不代表已验证微信 UAT 或外部回调。
+3. 对话核心的下单路径已连接确认令牌、限额/幂等守卫与 `gateway.createOrder`；守卫、会话、gateway 仍主要以内存数据实现。
+4. CodeGraph 当前识别 `parseWechatXml` 有 3 个引用点；`wechatVerify`、`wechatMessage` 各由 HTTP 服务自身路由调用；`OrderGuard` 有 6 个调用方（自检脚本与对话核心）。
+5. `.env` 未读取或展开；继续保持凭据不进入文档、日志或版本控制。
 
 ## 6. CodeGraph 索引结果
 
-已在工作树运行 `codegraph sync`（增量更新）：
+本次对原目录和新目录分别执行了索引同步：
 
 - 索引文件：`.codegraph/`
-- 此次变更：9 个文件（新增 6、修改 3）
-- 此次新增/更新节点：275
-- 当前 MCP 查询识别：70 个符号、5 个源码文件
+- 原目录 `mcd-smart-order` 已为空；其索引同步后显示 0 文件、0 节点、0 边。
+- 当前目录 `mcd-txt-order` 索引已更新且 up-to-date：35 个源码文件、957 个节点、3,173 条边。
+- 本次同步：9 个变更文件（新增 6、修改 3），更新 264 个节点。
+- 核心调用链查询识别 113 个符号，覆盖 6 个文件；微信入口查询识别 48 个符号，覆盖 4 个文件。
 
 交互式查询确认的调用/影响范围：
 
-- `src/index.ts` 现在创建 `ConversationCore` 并提供 CLI 命令入口；演示脚本会刻意停在预览，不替用户确认。
-- `ConversationCore.startOrder` 调用 `buildPreview`，生成确认令牌并调用 `SessionStore.toConfirming`；`place` 是实际写操作的编排位置。
-- `ConversationCore` 统一持有 `SessionStore`、`ConfirmationService`、`OrderGuard` 和 gateway，当前仍是内存态实现。
-- `src/channel/core.ts` 是渠道无关的对话核心；仍未在索引内找到独立的微信公众号 HTTP/XML 接入模块。
+- `src/index.ts` 与 `src/channel/server.ts` 都复用 `ConversationCore`，分别提供 CLI 和 HTTP/微信公众号入口。
+- `ConversationCore.place` 先消费绑定用户与购物车指纹的令牌，再执行守卫 `evaluate`/`begin`，最后调用 `gateway.createOrder`；调用点已由索引确认。
+- 微信消息路径：`ChannelServer.wechatMessage` → `parseWechatXml` / `dedupeKeyOf` → 对话核心；超时分支使用客服消息发送函数。
+- 查询到微信服务代码与 M4 自检脚本；本次只同步和审阅索引，未运行 M1–M4 自检。
