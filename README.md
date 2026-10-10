@@ -105,7 +105,8 @@ MCP Token       CX5E****mXHS
 | `npm run favorites` | 查看已配置的门店与餐品别名 |
 | `npm run tools` | 列出 MCP 当前**实时**提供的工具（实测 35 个，比 README 多） |
 | `npm run serve` | 起 HTTP 服务，`/` 是网页模拟器，`/wechat` 是公众号回调 |
-| `npm run check` | 跑全部 **253 项**自检（M1 60 + M2 83 + M3 36 + M4 74），离线可跑 |
+| `npm run check` | 跑全部 **271 项**自检（M1 60 + M2 83 + M3 36 + M4 74 + 礼节 18），离线可跑 |
+| `npm run check:release` | 只跑推送前礼节检查：凭据、手机号、支付链接、误入库的 `.env` |
 
 ### 网页模拟器
 
@@ -208,6 +209,17 @@ ngrok http 8787                  # 微信只回调 80/443 的公网 HTTPS
 - **赶时间的人**：开车路上、地铁上，一句话下单到店就取
 - **不想装 App 的人**：临时想吃、低频用户、长辈
 - **开发者**：想看一份"MCP 怎么真正用到产品里"的完整实现，尤其是对面上那些文档没写的坑
+
+---
+
+## 延伸阅读
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | **技术要点长文**：实测挖出的 5 个文档未记载的坑、下单链路为何被锁死、真钱之前的五道闸。做 MCP 集成的话建议先看这篇 |
+| [`docs/WECHAT_SETUP.md`](docs/WECHAT_SETUP.md) | 公众号接入分步手册（15 分钟接完，含排错表） |
+| [`docs/WECHAT_TESTING.md`](docs/WECHAT_TESTING.md) | 测试路径选型：为什么不需要麦当劳的公众号开发权 |
+| [`MCP_INTEGRATION.md`](MCP_INTEGRATION.md) | 用到的 MCP 工具清单与调用流程 |
 
 ---
 
