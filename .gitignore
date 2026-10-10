@@ -18,6 +18,9 @@ data/live/
 state/
 *.session.json
 
+# IDE 的本地索引缓存（不是项目文件，勿入库）
+.codegraph/
+
 .DS_Store
 Thumbs.db
 *.log
