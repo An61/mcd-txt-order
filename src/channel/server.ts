@@ -94,8 +94,10 @@ export class ChannelServer {
       });
     });
 
+    // 只监听回环地址：开发机不该把回调端口暴露到局域网，
+    // 公网访问交给 ngrok/cpolar 这类隧道工具显式建立。
     return new Promise((resolve) => {
-      server.listen(this.port, () => resolve(server));
+      server.listen(this.port, '127.0.0.1', () => resolve(server));
     });
   }
 
