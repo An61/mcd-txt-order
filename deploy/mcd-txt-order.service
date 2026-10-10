@@ -1,0 +1,49 @@
+# systemd 单元（不用 Docker 时用这个）
+#
+# 安装：
+#   sudo useradd -r -s /usr/sbin/nologin mcd
+#   sudo mkdir -p /opt/mcd-txt-order && sudo chown mcd:mcd /opt/mcd-txt-order
+#   # 把项目拷到 /opt/mcd-txt-order，写入 /opt/mcd-txt-order/.env
+#   sudo cp deploy/mcd-txt-order.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now mcd-txt-order
+#   journalctl -u mcd-txt-order -f
+
+[Unit]
+Description=mcd-txt-order (微信公众号一句话下单)
+Documentation=https://github.com/An61/mcd-txt-order
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mcd
+Group=mcd
+WorkingDirectory=/opt/mcd-txt-order
+
+# 凭据只从文件读，不写进单元文件（ EnvironmentFile 的文件权限应为 600 ）
+EnvironmentFile=/opt/mcd-txt-order/.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8787
+# 对外由 Nginx/Caddy 反代，Node 自己只听回环，因此调试入口默认关闭
+# 如需临时打开网页模拟器：systemctl edit 里加 Environment=EXPOSE_MOCK=true
+
+ExecStart=/usr/bin/node --experimental-strip-types /opt/mcd-txt-order/src/index.ts serve
+Restart=always
+RestartSec=3
+
+# ── 加固 ─────────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# 项目目录需要可读，.cache 需要可写
+ReadWritePaths=/opt/mcd-txt-order
+# 只允许 IPv4/IPv6 + unix 套接字，禁止其它协议族
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

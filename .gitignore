@@ -20,6 +20,7 @@ state/
 
 # IDE 的本地索引缓存（不是项目文件，勿入库）
 .codegraph/
+.abide/
 
 .DS_Store
 Thumbs.db

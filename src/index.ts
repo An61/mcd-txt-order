@@ -10,7 +10,8 @@
  *   npm run doctor         环境体检（Token、城市、目录、场景）
  *   npm run chat           交互式对话（默认接真实 MCP，无 Token 自动演示模式）
  *   npm run demo           离线演示：自动播一遍完整流程，含二次确认
- *   npm run serve          启动公众号 HTTP 服务（尚未实现，会明确说明）
+ *   npm run ip             查询公网出口 IP（填公众号 IP 白名单）
+ *   npm run serve          启动公众号 HTTP 服务
  */
 
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
@@ -18,12 +19,12 @@ import { findProjectRoot, loadDotEnv, mask } from './env.ts';
 import { McpStreamableHttpClient } from './mcp/client.ts';
 import { createGateway, describeScenes, GatewayError } from './mcp/gateway.ts';
 import { ConversationCore } from './channel/core.ts';
-import { ChannelServer } from './channel/server.ts';
+import { ChannelServer, type WechatEncryptMode } from './channel/server.ts';
 import { loadFavorites, defaultCity } from './domain/favorites.ts';
 
 loadDotEnv();
 
-type Command = 'tools' | 'favorites' | 'doctor' | 'chat' | 'serve' | 'order' | 'help';
+type Command = 'tools' | 'favorites' | 'doctor' | 'chat' | 'serve' | 'order' | 'ip' | 'help';
 
 function printHelp(): void {
   console.log(`
@@ -31,7 +32,8 @@ mcd-txt-order —— 微信里一句话下单麦当劳
 
   npm run tools        列出 MCP 当前真实提供的全部工具
   npm run favorites    查看已配置的门店/餐品别名
-  npm run doctor       环境体检
+  npm run doctor       环境体检（含公众号配置）
+  npm run ip           查询公网出口 IP（填进公众号 IP 白名单）
   npm run chat         交互式对话（--sample 强制离线演示模式）
   npm run demo         离线演示完整流程（含二次确认）
   npm run serve        启动公众号 HTTP 服务
@@ -41,6 +43,17 @@ mcd-txt-order —— 微信里一句话下单麦当劳
   --real               强制真实模式（缺 Token 会报错退出）
   --demo               自动播放预设对话，无需人工输入
 `);
+}
+
+function readEncryptMode(): WechatEncryptMode {
+  const raw = (process.env.WECHAT_ENCRYPT_MODE ?? 'plain').trim().toLowerCase();
+  return raw === 'encrypt' || raw === 'mixed' ? raw : 'plain';
+}
+
+function readExposeMock(): boolean | undefined {
+  const raw = process.env.EXPOSE_MOCK?.trim();
+  if (raw === undefined || raw === '') return undefined;
+  return raw === 'true' || raw === '1';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -126,6 +139,35 @@ async function cmdDoctor(): Promise<void> {
   console.log(`收藏配置        ${favorites.sourcePath}${favorites.usedFallback ? '（示例）' : ''}`);
   console.log(`门店/餐品       ${favorites.config.stores.length} / ${favorites.config.meals.length}`);
   console.log(`支持场景        ${describeScenes()}`);
+
+  console.log('\n── 公众号配置 ──\n');
+  const mode = readEncryptMode();
+  console.log(`WECHAT_TOKEN    ${mask(process.env.WECHAT_TOKEN)}`);
+  console.log(`AppID/Secret    ${mask(process.env.WECHAT_APP_ID)} / ${mask(process.env.WECHAT_APP_SECRET)}`);
+  console.log(`加解密方式      ${mode}`);
+  console.log(`EncodingAESKey  ${mask(process.env.WECHAT_ENCODING_AES_KEY)}`);
+  console.log(`监听 HOST:PORT  ${(process.env.HOST ?? '127.0.0.1')}:${process.env.PORT ?? '8787'}`);
+
+  const problems: string[] = [];
+  if (!process.env.WECHAT_TOKEN?.trim()) problems.push('缺 WECHAT_TOKEN：公众号服务器配置校验过不了');
+  if (!process.env.WECHAT_APP_ID?.trim() || !process.env.WECHAT_APP_SECRET?.trim()) {
+    problems.push('缺 AppID/AppSecret：无法调用客服消息接口，超时结果只能等用户下次发言补发');
+  }
+  if (mode !== 'plain') {
+    const aesKey = process.env.WECHAT_ENCODING_AES_KEY?.trim() ?? '';
+    if (aesKey.length !== 43) {
+      problems.push(`加解密方式为 ${mode}，但 EncodingAESKey 是 ${aesKey.length} 位（应为 43 位）`);
+    }
+  }
+  if (readEncryptMode() !== 'plain' && !process.env.WECHAT_APP_ID?.trim()) {
+    problems.push('非明文模式需要 AppID 才能校验密文尾部的 AppID');
+  }
+
+  if (problems.length === 0) {
+    console.log('\n✅ 公众号侧配置完备。');
+  } else {
+    for (const p of problems) console.log(`⚠️  ${p}`);
+  }
 
   if (!token) {
     console.log('\n⚠️  没有 Token，将运行在演示模式（离线快照，不会真的下单）。');
@@ -244,28 +286,55 @@ async function cmdServe(argv: readonly string[]): Promise<void> {
   const mode = pickGatewayMode(argv);
   const bundle = createGateway(mode);
   const core = new ConversationCore({ bundle });
-  const port = Number.parseInt(process.env.PORT ?? '8787', 10);
 
-  const server = new ChannelServer({
-    core,
-    port: Number.isFinite(port) ? port : 8787,
-    token: process.env.WECHAT_TOKEN?.trim() ?? '',
-    appId: process.env.WECHAT_APP_ID?.trim() ?? '',
-    appSecret: process.env.WECHAT_APP_SECRET?.trim() ?? '',
-    modeLabel: bundle.gateway.describe(),
-  });
+  const portRaw = Number.parseInt(process.env.PORT ?? '8787', 10);
+  const port = Number.isFinite(portRaw) ? portRaw : 8787;
+  const host = (process.env.HOST ?? '127.0.0.1').trim() || '127.0.0.1';
+  const encryptMode = readEncryptMode();
 
+  let server: ChannelServer;
+  try {
+    server = new ChannelServer({
+      core,
+      port,
+      host,
+      token: process.env.WECHAT_TOKEN?.trim() ?? '',
+      appId: process.env.WECHAT_APP_ID?.trim() ?? '',
+      appSecret: process.env.WECHAT_APP_SECRET?.trim() ?? '',
+      encodingAesKey: process.env.WECHAT_ENCODING_AES_KEY?.trim() ?? '',
+      encryptMode,
+      exposeMock: readExposeMock(),
+      modeLabel: bundle.gateway.describe(),
+    });
+  } catch (error) {
+    console.error(`\n⛔ 启动失败：${String(error instanceof Error ? error.message : error)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const cfg = server.config;
   const instance = await server.listen();
-  console.log(`🚀 服务已启动：http://localhost:${port}`);
-  console.log(`   网页模拟器  http://localhost:${port}/`);
-  console.log(`   健康检查    http://localhost:${port}/healthz`);
-  console.log(`   公众号回调  http://localhost:${port}/wechat`);
+
+  console.log(`🚀 服务已启动：http://${cfg.host}:${cfg.port}`);
+  console.log(`   监听地址    ${cfg.host}${cfg.host === '127.0.0.1' ? '（仅本机）' : '（对外）'}`);
+  console.log(`   健康检查    http://${cfg.host === '0.0.0.0' ? 'localhost' : cfg.host}:${cfg.port}/healthz`);
+  console.log(`   公众号回调  http://<你的域名>/wechat`);
   console.log('');
   console.log(`   数据模式    ${bundle.gateway.describe()}`);
+  console.log(`   加解密方式  ${cfg.encryptMode}${cfg.cryptoReady ? '（加解密器已就绪）' : '（未配置密钥）'}`);
   console.log(`   异步推送    ${server.canPushAsync ? '已启用（客服消息接口）' : '未启用，超时结果将在用户下次发言时回补'}`);
+  console.log(`   调试入口    ${cfg.exposeMock ? '已开启（/ 与 /api/chat 可访问）' : '已关闭（对外监听时的默认行为）'}`);
   console.log('');
-  console.log('没有公网地址？用内网穿透把 80/443 映射到本机，微信只回调这两个端口：');
-  console.log(`   ngrok http ${port}      # 或 cpolar / natapp`);
+
+  if (!cfg.wechatReady) {
+    console.log('⚠️  未配置 WECHAT_TOKEN，公众号回调会拒绝请求。');
+    console.log('   在 .env 里填好 WECHAT_TOKEN / WECHAT_APP_ID / WECHAT_APP_SECRET 再启动。');
+  }
+  if (cfg.host === '127.0.0.1') {
+    console.log('没有公网地址？两条路：');
+    console.log(`   · 临时调试：ngrok http ${cfg.port}（或 cpolar / natapp）`);
+    console.log('   · 正式上线：见 docs/WECHAT_PRODUCTION.md（域名 + HTTPS + 反代）');
+  }
   console.log('');
   console.log('按 Ctrl+C 停止。');
 
@@ -274,6 +343,32 @@ async function cmdServe(argv: readonly string[]): Promise<void> {
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+}
+
+/**
+ * 查询公网出口 IP。
+ *
+ * 存在的理由：调用 access_token / 客服消息接口前，必须把服务器出口 IP
+ * 填进公众号后台的「IP 白名单」，否则一律报 40164。
+ * 这条命令就是为了省掉「打开浏览器搜一下我的 IP」这一步。
+ */
+async function cmdIp(): Promise<void> {
+  const endpoints = ['https://api.ipify.org?format=json', 'https://myip.ipip.net/json'];
+  for (const url of endpoints) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      const text = await response.text();
+      const ip = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/.exec(text)?.[1];
+      if (ip) {
+        console.log(`公网出口 IP：${ip}`);
+        console.log('把它填进公众号后台 → 开发 → 基本配置 → IP 白名单。');
+        return;
+      }
+    } catch {
+      // 换下一个源
+    }
+  }
+  console.log('查询失败，可手动访问 https://api.ipify.org 查看。');
 }
 
 /**
@@ -357,6 +452,9 @@ async function main(): Promise<void> {
       break;
     case 'serve':
       await cmdServe(argv);
+      break;
+    case 'ip':
+      await cmdIp();
       break;
     case 'order':
       await cmdOrder(argv);

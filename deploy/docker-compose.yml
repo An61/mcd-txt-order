@@ -1,0 +1,59 @@
+# 一行起服务：docker compose -f deploy/docker-compose.yml up -d
+#
+# 服务本身只监听容器内的 8787，对外一律由 Caddy 终结 TLS 后反代过来。
+# 这样证书续期、HTTP/2、压缩都不用写进 Node 进程。
+
+services:
+  mcd-txt-order:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: mcd-txt-order
+    restart: unless-stopped
+    # 不映射宿主端口：只加入内部网络，外部访问必须经过 caddy
+    expose:
+      - "8787"
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "8787"
+      # 对外服务时默认就会关掉调试入口，这里显式写死防止误开
+      EXPOSE_MOCK: "false"
+    volumes:
+      # 门店/餐品偏好挂在宿主上，改完 docker compose restart 即可生效。
+      # 注意：本地可能只有 favorites.example.json（真实 favorites.json 通常被 .gitignore 排除），
+      # 此时容器会回退到示例配置并打出警告 —— 属正常行为。
+      - ../config:/app/config:ro
+    networks:
+      - mcd-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mcd-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - mcd-txt-order
+    networks:
+      - mcd-net
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  mcd-net:
+    driver: bridge

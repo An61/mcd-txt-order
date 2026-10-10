@@ -105,8 +105,9 @@ MCP Token       CX5E****mXHS
 | `npm run favorites` | 查看已配置的门店与餐品别名 |
 | `npm run tools` | 列出 MCP 当前**实时**提供的工具（实测 35 个，比 README 多） |
 | `npm run serve` | 起 HTTP 服务，`/` 是网页模拟器，`/wechat` 是公众号回调 |
-| `npm run check` | 跑全部 **271 项**自检（M1 60 + M2 83 + M3 36 + M4 74 + 礼节 18），离线可跑 |
+| `npm run check` | 跑全部 **326 项**自检（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 礼节 24），离线可跑 |
 | `npm run check:release` | 只跑推送前礼节检查：凭据、手机号、支付链接、误入库的 `.env` |
+| `npm run ip` | 查公网出口 IP —— 填进公众号 IP 白名单，否则客服接口报 40164 |
 
 ### 网页模拟器
 
@@ -137,6 +138,16 @@ ngrok http 8787                  # 微信只回调 80/443 的公网 HTTPS
 
 **15 分钟接完的分步手册**：[`docs/WECHAT_SETUP.md`](docs/WECHAT_SETUP.md)（配置 → 穿透 → 填后台 → 发第一句话 → 排错表）。
 **方案选型**（测试号 / 订阅号 / 企业微信，以及为什么不需要麦当劳的开发权）：[`docs/WECHAT_TESTING.md`](docs/WECHAT_TESTING.md)。
+**放到公网正式上线**：[`docs/WECHAT_PRODUCTION.md`](docs/WECHAT_PRODUCTION.md)（TLS、加解密模式、IP 白名单、灰度回滚、上线检查清单）。
+
+### 生产级能力（不只是能跑）
+
+| 能力 | 说明 |
+|---|---|
+| **消息加解密** | 支持明文 / 兼容 / 安全三种模式。安全模式下 `echostr` 也是密文、回复也必须加密，这些坑都处理了 |
+| **调试入口自动隔离** | `HOST=0.0.0.0` 对外监听时，网页模拟器与 `/api/chat` 自动关闭（它们无需验签即可驱动下单链路） |
+| **部署产物** | `deploy/` 下 Docker + Caddy（自动 HTTPS）、Nginx、systemd unit 三套，开箱即用 |
+| **快速失败** | 安全模式缺密钥时直接拒绝启动，而不是等第一条消息进来才报错 |
 
 ### 真实链路跑出来的样子
 
@@ -219,6 +230,7 @@ ngrok http 8787                  # 微信只回调 80/443 的公网 HTTPS
 | [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | **技术要点长文**：实测挖出的 5 个文档未记载的坑、下单链路为何被锁死、真钱之前的五道闸。做 MCP 集成的话建议先看这篇 |
 | [`docs/WECHAT_SETUP.md`](docs/WECHAT_SETUP.md) | 公众号接入分步手册（15 分钟接完，含排错表） |
 | [`docs/WECHAT_TESTING.md`](docs/WECHAT_TESTING.md) | 测试路径选型：为什么不需要麦当劳的公众号开发权 |
+| [`docs/WECHAT_PRODUCTION.md`](docs/WECHAT_PRODUCTION.md) | **上线手册**：域名与 HTTPS、加解密模式、IP 白名单、上线检查清单、灰度与回滚 |
 | [`MCP_INTEGRATION.md`](MCP_INTEGRATION.md) | 用到的 MCP 工具清单与调用流程 |
 
 ---
@@ -267,6 +279,9 @@ src/
 | M3 | 下单编排 + 会话核心 + CLI 入口 | ✅ 36 项自检通过（含真实链路） |
 | M4 | 渠道层（模拟器 / 验签 / XML / 5 秒异步 / 去重） | ✅ 74 项自检通过 |
 | M5 | 参赛文件 | ✅ README / CONTEST_DECLARATION / MCP_INTEGRATION / workbuddy.md 已备齐 |
+| M6 | 发布报名 | ✅ 仓库已公开，活动仓库 Issue #361 已提交 |
+| M7 | 冲榜物料 | ✅ 首屏演示图、接入手册、技术要点长文、礼节门禁 |
+| M8 | 生产上线 | ✅ 消息加解密 + 路由隔离 + 部署产物 + 上线手册，49 项自检通过 |
 
 > 本仓库是「麦当劳程序员节创意开发大赛」参赛作品。提交 `CONTEST_DECLARATION.md` / `MCP_INTEGRATION.md` 等文件均按要求放置。
 

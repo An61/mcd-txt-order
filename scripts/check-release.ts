@@ -48,6 +48,59 @@ interface Rule {
   readonly pattern: RegExp;
 }
 
+/**
+ * 判断 `KEY=value` 里的 value 是不是**占位符**而不是真凭据。
+ *
+ * 文档里的配置示例（`WECHAT_APP_SECRET=****`、`WECHAT_APP_ID=wx####`、
+ * `WECHAT_TOKEN=你自己编的一个字符串`）会被 R1 当真值抓出来。
+ * 与其让写文档的人去改写法，不如让规则认得出占位符 ——
+ * 真密钥不会是纯 `*` / 纯 `#`，也不会带中文。
+ */
+export function isPlaceholderValue(value: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  if (/[一-龥]/.test(v)) return true;
+  // 去掉常见前缀（wx / sk- / ghp_ 等）后，若只剩填充字符就算占位符
+  const body = v.replace(/^(wx|sk-|ghp_|gho_|xoxb-|Bearer\s+)/i, '');
+  if (/^[*\s#xX._-]+$/.test(body)) return true;
+  if (/^(TODO|CHANGEME|xxx+|placeholder|your[-_].*)$/i.test(v)) return true;
+  return false;
+}
+
+/** 从一行里取出 `KEY=value` 的 value（取不到返回 undefined） */
+function assignedValue(line: string, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const m = new RegExp(`(?:^|\\s)${key}\\s*=\\s*(\\S+)`).exec(line);
+    if (m?.[1]) return m[1];
+  }
+  return undefined;
+}
+
+/**
+ * 「顺序字母表」检测：测试里常写 `abcdefg…0123…` 这种可读的固定串当密钥。
+ * 允许最多 2 处跳变（a→z 接 0、9 接 A 这类分段），真随机密钥不可能长这样。
+ */
+export function isSequentialRun(text: string): boolean {
+  if (text.length < 8) return false;
+  let breaks = 0;
+  for (let i = 1; i < text.length; i += 1) {
+    if (text.charCodeAt(i) !== text.charCodeAt(i - 1) + 1) breaks += 1;
+  }
+  return breaks <= 2;
+}
+
+/** 行内显式豁免标记：`/* gate:fixture *\/`。需要人手写，且脚本会打印豁免条数 */
+const FIXTURE_MARKER = 'gate:fixture';
+
+/** 与 R1 的捕获组保持一致：抽出来是为了让占位符判断能拿到同一个键集合 */
+const CREDENTIAL_KEYS = [
+  'MCD_MCP_TOKEN',
+  'WECHAT_APP_SECRET',
+  'WECHAT_APP_ID',
+  'CONFIRM_SECRET',
+  'WECHAT_TOKEN',
+] as const;
+
 const RULES: readonly Rule[] = [
   {
     id: 'R1',
@@ -59,7 +112,9 @@ const RULES: readonly Rule[] = [
       line.includes('/^') ||
       line.includes('.*$') ||
       // 环境变量引用与占位符
-      /\$\{|process\.env|<|\.\.\.|your_|xxx|TODO/i.test(line),
+      /\$\{|process\.env|<|\.\.\.|your_|xxx|TODO/i.test(line) ||
+      // 文档里的示例值：`****` / `wx####` / 中文说明
+      isPlaceholderValue(assignedValue(line, CREDENTIAL_KEYS) ?? ''),
   },
   {
     id: 'R2',
@@ -90,9 +145,13 @@ const RULES: readonly Rule[] = [
       /^[0-9]+$/.test(match) ||
       // 单个字符重复到底的填充串（测试里伪造签名常用），不是真密钥
       /^(.)\1+$/.test(match) ||
+      // 顺序字母表（abcdefg…0123…）：测试常拿它当固定密钥，真随机密钥不会长这样
+      isSequentialRun(match) ||
+      // 行内显式标注的测试夹具
+      line.includes(FIXTURE_MARKER) ||
       // 不在凭据上下文里的长串一律放过：否则 tsconfig 的
       // forceConsistentCasingInFileNames 这类合法标识符会被误判
-      !/(token|secret|key|password|passwd|auth|credential|bearer|sign)/i.test(line),
+      !/(token|secret|key|password|passwd|auth|credential|bearer|sign|aes)/i.test(line),
   },
 ];
 
@@ -252,6 +311,8 @@ section('文本内容扫描');
 const textFindings: Array<{ file: string } & Finding> = [];
 const media: string[] = [];
 const oversize: string[] = [];
+// 豁免标记出现多少次必须可见 —— 否则这个后门可以被悄悄滥用
+let fixtureMarkers = 0;
 
 for (const file of files) {
   if (SCAN_EXEMPT.has(file)) continue;
@@ -279,6 +340,7 @@ for (const file of files) {
     media.push(`${file} (二进制)`);
     continue;
   }
+  fixtureMarkers += (text.match(new RegExp(FIXTURE_MARKER, 'g')) ?? []).length;
   for (const f of scanText(text)) textFindings.push({ file, ...f });
 }
 
@@ -288,6 +350,10 @@ for (const rule of RULES) {
 }
 
 section('需要人工确认的部分');
+if (fixtureMarkers > 0) {
+  console.log(`  ⚠️  仓库里有 ${fixtureMarkers} 处 gate:fixture 豁免标记，请确认它们都是测试夹具：`);
+  console.log('      （标记是人手写的后门，必须能被看见，否则等同于取消了检查）');
+}
 if (media.length > 0) {
   console.log('  ⚠️  以下内容脚本读不出，推送前请人工过一眼（确认无真实 Token / 支付链接）：');
   for (const m of media) console.log(`      · ${m}`);
@@ -309,6 +375,9 @@ function hitsRuleOn(text: string, id: string): boolean {
 check('R1 能抓到真实凭据赋值', hitsRuleOn(`MCD_MCP_TOKEN=${FAKE_TOKEN}\n`, 'R1'));
 check('R1 不误伤空的 .env.example', !hitsRuleOn('MCD_MCP_TOKEN=\n', 'R1'));
 check('R1 不误伤代码里的正则字面量', !hitsRuleOn("if (/^MCD_MCP_TOKEN=.*$/m.test(env)) {}", 'R1'));
+check('R1 不误伤文档里的星号占位符', !hitsRuleOn('WECHAT_APP_SECRET=****************\n', 'R1'));
+check('R1 不误伤文档里的井号占位符', !hitsRuleOn('WECHAT_APP_ID=wx##################\n', 'R1'));
+check('R1 不误伤中文说明式占位符', !hitsRuleOn('WECHAT_TOKEN=你自己编的一个字符串\n', 'R1'));
 
 check('R2 能抓到真实 Bearer', hitsRuleOn(`Authorization: Bearer ${FAKE_TOKEN}`, 'R2'));
 check('R2 不误伤占位符', !hitsRuleOn('Authorization: Bearer <token>', 'R2'));
@@ -323,6 +392,12 @@ check('R4 能抓到支付链接', hitsRuleOn('https://mcd.cn/pay/abc123', 'R4'))
 
 check('R5 能抓到裸密串', hitsRuleOn(`token: ${FAKE_TOKEN}`, 'R5'));
 check('R5 不误伤 URL 路径', !hitsRuleOn('https://x.cn/pcm/prod/menu/20250611/product/MS_1100_600_1749175370846.png', 'R5'));
+check(
+  'R5 不误伤顺序字母表夹具',
+  !hitsRuleOn("const AES_KEY = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';", 'R5'),
+);
+check('R5 尊重行内豁免标记', !hitsRuleOn(`const K = '${FAKE_TOKEN}'; // gate:fixture`, 'R5'));
+check('R5 仍然抓得到没有标记的真密串', hitsRuleOn(`aes_key = '${FAKE_TOKEN}'`, 'R5'));
 
 // ─────────────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(52)}`);

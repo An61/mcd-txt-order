@@ -1,0 +1,35 @@
+# Caddy 会自动申请并续期 Let's Encrypt 证书，只需把域名解析到本机。
+# 用法（与 deploy/docker-compose.yml 配套）：
+#   把下面的域名换成你自己的，然后 docker compose up -d
+#
+# 这里**只放行 /wechat 与 /healthz**，其余一律 404。
+# 理由：容器里 EXPOSE_MOCK=false 时 Node 已经关掉了调试入口，
+# 但反代层再做一次白名单是纵深防御 —— 万一哪天有人手滑把开关打开，
+# 公网依然碰不到 /api/chat。
+
+mcd.example.com {
+	encode zstd gzip
+
+	# 微信服务器 5 秒断连，反代超时必须小于它，否则白等
+	reverse_proxy /wechat* mcd-txt-order:8787 {
+		flush_interval -1
+		transport http {
+			read_timeout 5s
+			write_timeout 5s
+		}
+	}
+
+	reverse_proxy /healthz mcd-txt-order:8787
+
+	log {
+		output stdout
+		format console
+	}
+
+	# 请求体上限：微信消息再大也到不了 1MB，卡死上限可挡住明显的滥用
+	request_body {
+		max_size 1MB
+	}
+
+	respond "Not Found" 404
+}

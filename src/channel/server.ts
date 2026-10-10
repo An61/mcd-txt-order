@@ -1,10 +1,10 @@
 /**
- * HTTP 服务（T22）。零依赖，纯 node:http。
+ * HTTP 服务（T22 / M8 生产化）。零依赖，纯 node:http。
  *
  * 一个进程同时提供四类入口，刻意如此 —— 评审者只需 `npm run serve` 就能全部体验：
  *   GET  /           网页模拟器（Tier 0，不需公众号）
  *   POST /api/chat   模拟器用的 JSON 对话接口
- *   GET  /wechat     公众号服务器配置校验
+ *   GET  /wechat     公众号服务器配置校验（安全模式下 echostr 是密文）
  *   POST /wechat     公众号消息接收（5 秒超时 → 异步推送）
  *   GET  /healthz    健康检查
  *
@@ -12,6 +12,13 @@
  * 找店 → 菜单 → 详情 → 算价 这条链路实测要 2~6 秒，必然有部分请求超时。
  * 处理办法是**双阶段响应**：先回 `success` 抑制微信重试，后台跑完再用客服消息推回去。
  * 没有客服消息权限时（个人订阅号），降级为「用户下次发言时把结果补上」。
+ *
+ * M8 新增的三件事，全部围绕「真的放到公网上」：
+ *   ① 消息加解密（安全模式 / 兼容模式）—— 见 src/channel/crypto.ts
+ *   ② 监听地址可配：默认仍只听回环，正式部署用 HOST=0.0.0.0
+ *   ③ **对外监听时自动关闭网页模拟器与 /api/chat**。
+ *      这两个入口无需微信验签即可驱动整套下单链路，暴露在公网上等于
+ *      把「你的麦当劳账号」开放给任何人。默认安全，需要调试再显式打开。
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
@@ -27,6 +34,12 @@ import {
   AccessTokenProvider,
   type SendResult,
 } from './wechat.ts';
+import {
+  WechatMessageCrypto,
+  extractEncrypt,
+  isEncryptedEnvelope,
+  type EncryptedReply,
+} from './crypto.ts';
 import { MessageDeduplicator, dedupeKeyOf, type WechatEnvelope } from './dedupe.ts';
 
 /**
@@ -38,12 +51,22 @@ const REPLY_DEADLINE_MS = 4300;
 /** 待回补结果的存活时间（没客服接口时，等用户下次发言再补） */
 const PENDING_TTL_MS = 30 * 60 * 1000;
 
+/** 公众号后台的三种消息加解密方式 */
+export type WechatEncryptMode = 'plain' | 'mixed' | 'encrypt';
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '']);
+
 export interface ServerOptions {
   readonly core: ConversationCore;
   readonly port?: number;
+  readonly host?: string;
   readonly token?: string;
   readonly appId?: string;
   readonly appSecret?: string;
+  readonly encodingAesKey?: string;
+  readonly encryptMode?: WechatEncryptMode;
+  /** 是否暴露网页模拟器与 /api/chat。默认：仅回环监听时暴露 */
+  readonly exposeMock?: boolean;
   readonly dedupe?: MessageDeduplicator;
   readonly modeLabel?: string;
   readonly now?: () => number;
@@ -59,11 +82,15 @@ interface PendingResult {
 export class ChannelServer {
   private readonly core: ConversationCore;
   private readonly port: number;
+  private readonly host: string;
   private readonly token: string;
   private readonly dedupe: MessageDeduplicator;
   private readonly modeLabel: string;
   private readonly now: () => number;
   private readonly provider?: AccessTokenProvider;
+  private readonly crypto?: WechatMessageCrypto;
+  private readonly encryptMode: WechatEncryptMode;
+  private readonly exposeMock: boolean;
   private readonly pending = new Map<string, PendingResult>();
   private readonly startedAtMs: number;
   private readonly replyDeadlineMs: number;
@@ -71,20 +98,61 @@ export class ChannelServer {
   constructor(options: ServerOptions) {
     this.core = options.core;
     this.port = options.port ?? 8787;
+    this.host = options.host ?? '127.0.0.1';
     this.token = options.token ?? '';
+    this.encryptMode = options.encryptMode ?? 'plain';
     this.dedupe = options.dedupe ?? new MessageDeduplicator();
     this.modeLabel = options.modeLabel ?? '真实模式';
     this.now = options.now ?? Date.now;
     this.replyDeadlineMs = options.replyDeadlineMs ?? REPLY_DEADLINE_MS;
     this.startedAtMs = this.now();
+
+    // 安全默认值：监听地址不是回环就意味着要对外服务，此时调试入口必须关掉，
+    // 除非运维明确写了 EXPOSE_MOCK=true。
+    this.exposeMock = options.exposeMock ?? LOOPBACK_HOSTS.has(this.host);
+
     if (options.appId && options.appSecret) {
       this.provider = new AccessTokenProvider(options.appId, options.appSecret, this.now);
+    }
+
+    if (options.encodingAesKey && options.appId) {
+      this.crypto = new WechatMessageCrypto({
+        token: this.token,
+        appId: options.appId,
+        encodingAesKey: options.encodingAesKey,
+      });
+    }
+
+    // 快速失败：安全模式却配不出加解密器，等到微信第一次推消息才发现就晚了
+    if (this.encryptMode === 'encrypt' && !this.crypto) {
+      throw new Error(
+        'WECHAT_ENCRYPT_MODE=encrypt 但缺少 WECHAT_ENCODING_AES_KEY 或 WECHAT_APP_ID，无法解密消息。' +
+          '请补全配置，或改用 WECHAT_ENCRYPT_MODE=plain。',
+      );
     }
   }
 
   /** 有 AppSecret 才算具备异步推送能力 */
   get canPushAsync(): boolean {
     return this.provider !== undefined;
+  }
+
+  get config(): {
+    readonly host: string;
+    readonly port: number;
+    readonly encryptMode: WechatEncryptMode;
+    readonly exposeMock: boolean;
+    readonly cryptoReady: boolean;
+    readonly wechatReady: boolean;
+  } {
+    return {
+      host: this.host,
+      port: this.port,
+      encryptMode: this.encryptMode,
+      exposeMock: this.exposeMock,
+      cryptoReady: this.crypto !== undefined,
+      wechatReady: this.token.length > 0,
+    };
   }
 
   listen(): Promise<Server> {
@@ -94,10 +162,8 @@ export class ChannelServer {
       });
     });
 
-    // 只监听回环地址：开发机不该把回调端口暴露到局域网，
-    // 公网访问交给 ngrok/cpolar 这类隧道工具显式建立。
     return new Promise((resolve) => {
-      server.listen(this.port, '127.0.0.1', () => resolve(server));
+      server.listen(this.port, this.host, () => resolve(server));
     });
   }
 
@@ -108,21 +174,27 @@ export class ChannelServer {
     const path = url.pathname;
 
     if (req.method === 'GET' && (path === '/' || path === '/demo')) {
+      if (!this.exposeMock) return this.fail(res, 404, 'Not Found');
       return this.html(res, renderMockPage(this.modeLabel));
     }
 
     if (req.method === 'GET' && path === '/healthz') {
+      const cfg = this.config;
       return this.json(res, 200, {
         ok: true,
         mode: this.core.gateway.mode,
         uptimeSec: Math.floor((this.now() - this.startedAtMs) / 1000),
-        wechatConfigured: this.token.length > 0,
+        wechatConfigured: cfg.wechatReady,
+        encryptMode: cfg.encryptMode,
+        cryptoReady: cfg.cryptoReady,
+        exposeMock: cfg.exposeMock,
         asyncPush: this.canPushAsync,
         dedupeKeys: this.dedupe.size,
       });
     }
 
     if (req.method === 'POST' && path === '/api/chat') {
+      if (!this.exposeMock) return this.fail(res, 404, 'Not Found');
       return this.apiChat(req, res);
     }
 
@@ -164,19 +236,19 @@ export class ChannelServer {
   // ── 公众号 ────────────────────────────────────────────────
 
   private wechatVerify(url: URL, res: ServerResponse): void {
-    const signature = url.searchParams.get('signature') ?? '';
-    const timestamp = url.searchParams.get('timestamp') ?? '';
-    const nonce = url.searchParams.get('nonce') ?? '';
-    const echostr = url.searchParams.get('echostr') ?? '';
-
-    if (!this.token) {
-      this.fail(res, 503, '未配置 WECHAT_TOKEN，无法完成服务器配置校验');
-      return;
-    }
-    const ok = verifySignature({ token: this.token, signature, timestamp, nonce });
+    const result = resolveWechatVerify({
+      token: this.token,
+      mode: this.encryptMode,
+      crypto: this.crypto,
+      signature: url.searchParams.get('signature') ?? '',
+      msgSignature: url.searchParams.get('msg_signature') ?? '',
+      timestamp: url.searchParams.get('timestamp') ?? '',
+      nonce: url.searchParams.get('nonce') ?? '',
+      echostr: url.searchParams.get('echostr') ?? '',
+    });
     // 校验失败也必须回 200 + 明确文案：微信后台只认「配置失败」这一种结果，
     // 返回 500 会让使用者误以为是服务挂了
-    this.text(res, 200, ok ? echostr : 'signature mismatch');
+    this.text(res, 200, result.body);
   }
 
   private async wechatMessage(req: IncomingMessage, url: URL, res: ServerResponse): Promise<void> {
@@ -186,20 +258,63 @@ export class ChannelServer {
     }
 
     const signature = url.searchParams.get('signature') ?? '';
+    const msgSignature = url.searchParams.get('msg_signature') ?? '';
     const timestamp = url.searchParams.get('timestamp') ?? '';
     const nonce = url.searchParams.get('nonce') ?? '';
-    if (!verifySignature({ token: this.token, signature, timestamp, nonce })) {
-      // 伪造请求：直接丢弃，绝不进入业务链路
-      this.fail(res, 403, 'invalid signature');
-      return;
-    }
 
     const raw = await readBody(req);
-    const envelope = parseWechatXml(raw) as WechatEnvelope & Record<string, string>;
+
+    // ── 解密 ───────────────────────────────────────────────
+    let xml = raw;
+    let encryptedRequest = false;
+
+    if (isEncryptedEnvelope(raw)) {
+      const encrypt = extractEncrypt(raw);
+      if (!this.crypto) {
+        this.fail(res, 503, '收到加密消息但未配置 WECHAT_ENCODING_AES_KEY');
+        return;
+      }
+      // 密文自带签名：先验证再解密，避免为伪造请求白白做一次 AES
+      const signed = msgSignature
+        ? this.crypto.verifyMessageSignature({ msgSignature, timestamp, nonce, encrypt })
+        : // 兼容模式下部分实现只传 signature，此时用明文规则校验
+          verifySignature({ token: this.token, signature, timestamp, nonce });
+      if (!signed) {
+        this.fail(res, 403, 'invalid signature');
+        return;
+      }
+
+      try {
+        xml = this.crypto.decrypt(encrypt);
+      } catch (error) {
+        this.fail(res, 400, `解密失败：${String(error instanceof Error ? error.message : error)}`);
+        return;
+      }
+      encryptedRequest = true;
+    } else {
+      if (this.encryptMode === 'encrypt') {
+        // 安全模式下出现明文 = 不符合预期，按伪造请求处理
+        this.fail(res, 403, 'invalid signature');
+        return;
+      }
+      if (!verifySignature({ token: this.token, signature, timestamp, nonce })) {
+        this.fail(res, 403, 'invalid signature');
+        return;
+      }
+    }
+
+    const envelope = parseWechatXml(xml) as WechatEnvelope & Record<string, string>;
     const openId = envelope.FromUserName ?? '';
     const toUser = envelope.ToUserName ?? '';
     if (!openId) {
       this.text(res, 200, buildSuccessReply());
+      return;
+    }
+
+    // 事件消息：关注给欢迎语，其余一律 success —— 对取关/菜单点击刷屏没有意义
+    const eventReply = this.eventReply(envelope);
+    if (eventReply !== undefined) {
+      this.reply(res, eventReply, encryptedRequest);
       return;
     }
 
@@ -216,19 +331,58 @@ export class ChannelServer {
 
     const incoming = extractText(envelope);
     if (!incoming) {
-      // 图片/语音/事件等暂不支持，给一句明确提示而不是沉默
-      this.text(res, 200, buildTextReply({ toUserName: openId, fromUserName: toUser, content: '目前只支持文字消息哦～' }));
+      this.reply(
+        res,
+        buildTextReply({
+          toUserName: openId,
+          fromUserName: toUser,
+          content: '目前只支持文字消息哦～',
+        }),
+        encryptedRequest,
+      );
       return;
     }
 
     const reply = await this.replyWithinDeadline(openId, incoming);
     if (reply !== undefined) {
-      this.text(res, 200, buildTextReply({ toUserName: openId, fromUserName: toUser, content: reply }));
+      this.reply(
+        res,
+        buildTextReply({ toUserName: openId, fromUserName: toUser, content: reply }),
+        encryptedRequest,
+      );
       return;
     }
 
     // 来不及：回 success 抑制重试，结果稍后异步送达
     this.text(res, 200, buildSuccessReply());
+  }
+
+  /** 事件消息。返回 undefined 表示不是需要回复的事件 */
+  private eventReply(envelope: Record<string, string>): string | undefined {
+    if ((envelope.MsgType ?? '').toLowerCase() !== 'event') return undefined;
+    const event = (envelope.Event ?? '').toLowerCase();
+
+    if (event === 'subscribe' || event === 'scan') {
+      return buildTextReply({
+        toUserName: envelope.FromUserName ?? '',
+        fromUserName: envelope.ToUserName ?? '',
+        content: WELCOME_TEXT,
+      });
+    }
+    // 取关、菜单点击、模板送达等：不回复，避免骚扰用户
+    return buildSuccessReply();
+  }
+
+  /** 统一出口：按请求是否加密决定回复明文还是密文 */
+  private reply(res: ServerResponse, plainXml: string, encryptedRequest: boolean): void {
+    if (!encryptedRequest) {
+      return this.text(res, 200, plainXml);
+    }
+    if (!this.crypto) {
+      return this.fail(res, 503, '需要加密回复但未配置 WECHAT_ENCODING_AES_KEY');
+    }
+    const encrypted: EncryptedReply = this.crypto.encryptReply(plainXml, this.now);
+    return this.text(res, 200, encrypted.xml);
   }
 
   /**
@@ -302,6 +456,70 @@ export class ChannelServer {
     res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(message);
   }
+}
+
+/** 关注公众号后的第一句话。要能让陌生人 10 秒内知道怎么用 */
+export const WELCOME_TEXT = [
+  '欢迎使用一句话下单 👋',
+  '',
+  '发一句话就行，比如：',
+  '  巨无霸 香梅北',
+  '  两个巨无霸一杯可乐 香梅北',
+  '',
+  '我会自动找到门店、算好真实价格，',
+  '把预览发给你；回复「确认」才会真的下单，',
+  '下单后把支付链接发给你。',
+  '',
+  '发「帮助」看完整用法。',
+].join('\n');
+
+/**
+ * 服务器配置校验（纯函数，便于单测）。
+ *
+ * 安全模式下微信依然用 token/timestamp/nonce 算 signature，
+ * 但 **echostr 是密文** —— 这是很多人第一次配安全模式时卡住的地方：
+ * 直接把密文原样回给微信，后台会一直提示「token 验证失败」。
+ */
+export function resolveWechatVerify(params: {
+  readonly token: string;
+  readonly mode: WechatEncryptMode;
+  readonly crypto?: WechatMessageCrypto;
+  readonly signature: string;
+  readonly msgSignature: string;
+  readonly timestamp: string;
+  readonly nonce: string;
+  readonly echostr: string;
+}): { readonly ok: boolean; readonly body: string } {
+  const { token, mode, crypto, signature, msgSignature, timestamp, nonce, echostr } = params;
+
+  if (!token) return { ok: false, body: '未配置 WECHAT_TOKEN，无法完成服务器配置校验' };
+
+  // 密文形态优先按 msg_signature 校验，否则退回明文规则
+  const signOk = msgSignature && crypto
+    ? crypto.verifyMessageSignature({ msgSignature, timestamp, nonce, encrypt: echostr })
+    : verifySignature({ token, signature, timestamp, nonce });
+
+  if (!signOk) return { ok: false, body: 'signature mismatch' };
+
+  if (mode === 'encrypt') {
+    if (!crypto) return { ok: false, body: '安全模式缺少 WECHAT_ENCODING_AES_KEY' };
+    try {
+      return { ok: true, body: crypto.decrypt(echostr) };
+    } catch (error) {
+      return { ok: false, body: `echostr 解密失败：${String(error instanceof Error ? error.message : error)}` };
+    }
+  }
+
+  // 兼容模式：能给明文就给明文，给不了（说明是密文）就解密
+  if (crypto && !/<[^>]+>/.test(echostr)) {
+    try {
+      return { ok: true, body: crypto.decrypt(echostr) };
+    } catch {
+      return { ok: false, body: 'echostr 既不是明文也无法解密' };
+    }
+  }
+
+  return { ok: true, body: echostr };
 }
 
 /** 从解析后的信封里取出用户真正说的话 */
