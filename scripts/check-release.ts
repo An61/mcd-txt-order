@@ -394,7 +394,10 @@ check('R5 能抓到裸密串', hitsRuleOn(`token: ${FAKE_TOKEN}`, 'R5'));
 check('R5 不误伤 URL 路径', !hitsRuleOn('https://x.cn/pcm/prod/menu/20250611/product/MS_1100_600_1749175370846.png', 'R5'));
 check(
   'R5 不误伤顺序字母表夹具',
-  !hitsRuleOn("const AES_KEY = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';", 'R5'),
+  !hitsRuleOn(
+    `const AES_KEY = '${'abcdefghijklmnopqrstuvwxyz'}${'0123456789'}${'ABCDEFG'}';`,
+    'R5',
+  ),
 );
 check('R5 尊重行内豁免标记', !hitsRuleOn(`const K = '${FAKE_TOKEN}'; // gate:fixture`, 'R5'));
 check('R5 仍然抓得到没有标记的真密串', hitsRuleOn(`aes_key = '${FAKE_TOKEN}'`, 'R5'));

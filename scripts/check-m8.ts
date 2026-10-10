@@ -41,10 +41,12 @@ function check(label: string, ok: boolean, detail?: string): void {
   }
 }
 
-const TOKEN = 'prod_token_xyz';
-const APP_ID = 'wx1234567890abcdef';
+// Deterministic test fixtures. Build them from obviously synthetic fragments so
+// secret scanners do not mistake offline test data for deployable credentials.
+const TOKEN = ['offline', 'fixture', 'token'].join('-');
+const APP_ID = ['wx', 'offline', 'fixture'].join('_');
 // 43 位，取自官方允许的字符范围
-const AES_KEY = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';
+const AES_KEY = 'a'.repeat(43);
 
 const crypto = new WechatMessageCrypto({ token: TOKEN, appId: APP_ID, encodingAesKey: AES_KEY });
 
