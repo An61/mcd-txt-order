@@ -1,6 +1,6 @@
 # mcd-txt-order CodeGraph
 
-> 最近重扫：2026-10-10
+> 最近重扫：2026-10-11
 >
 > 基于当前工作树源码与 CodeGraph 索引；`.env` 与 `.cache/probe/` 只作为运行数据/凭据边界，不展开内容。
 
@@ -10,11 +10,12 @@
 |---|---:|---|
 | `src/domain` | 9 | 领域类型、订单流程、文本/数量解析、匹配、收藏、会话、意图 |
 | `src/mcp` | 4 | MCP 客户端、gateway、归一化、营养解析 |
-| `src/channel` | 4 | 对话核心、微信 HTTP 服务、XML/客服消息、消息去重 |
-| `src/safety` | 2 | HMAC 确认令牌、幂等/冷却/限额/鉴权失败守卫 |
+| `src/channel` | 6 | 对话核心、微信 HTTP 服务、XML/客服消息、加解密、消息去重、网页模拟器 |
+| `src/safety` | 4 | HMAC 确认令牌、幂等/冷却/限额、持久化订单状态、对外错误脱敏 |
 | `src/data` | 1 | 真实探针快照生成的离线示例数据 |
-| `scripts` | 9 | M1–M4 自检、探针、样例生成与 Token 配置 |
-| 文档/配置与索引 | 25 | 规格、计划、审计、微信方案、示例配置、CodeGraph |
+| `src` 根目录 | 2 | CLI 入口与环境变量读取 |
+| `scripts` | 17 | M1–M4/M8/S9 自检、探针、样例生成、报名检查与 Token 配置 |
+| 文档/配置与索引 | 32 | 规格、计划、审计、微信方案、部署配置、fixtures、CI 与 CodeGraph |
 
 ## 2. 模块图
 
@@ -136,10 +137,10 @@ src/data/sample.ts
 
 ## 5. 当前结构性发现
 
-1. 当前项目目录为 `mcd-txt-order`；此前的 `mcd-smart-order` 目录现已为空。该新工作树包含 `src/channel/server.ts`、`src/channel/wechat.ts`、`src/channel/dedupe.ts` 等微信接入模块。
-2. 微信服务已接入签名验证、XML 解析、消息去重与 5 秒被动回复超时处理；读取代码并不代表已验证微信 UAT 或外部回调。
-3. 对话核心的下单路径已连接确认令牌、限额/幂等守卫与 `gateway.createOrder`；守卫、会话、gateway 仍主要以内存数据实现。
-4. CodeGraph 当前识别 `parseWechatXml` 有 3 个引用点；`wechatVerify`、`wechatMessage` 各由 HTTP 服务自身路由调用；`OrderGuard` 有 6 个调用方（自检脚本与对话核心）。
+1. 当前项目目录为 `mcd-txt-order`；此前的 `mcd-smart-order` 目录现已为空。该工作树包含 `src/channel/server.ts`、`src/channel/wechat.ts`、`src/channel/crypto.ts`、`src/channel/dedupe.ts` 等微信接入模块。
+2. 微信服务已接入签名验证、XML/CDATA 解析、消息去重、请求体 1 MiB 上限、5 秒请求超时、每分钟限流与被动回复超时处理；读取代码并不代表已验证微信 UAT 或外部回调。
+3. 对话核心的下单路径已连接确认令牌、限额/幂等守卫与 `gateway.createOrder`；生产模式默认使用 SQLite 订单尝试存储，进程重启或多实例共享文件时保留 pending/succeeded/failed/unknown 状态。
+4. CodeGraph 当前识别 `ConversationCore` 有 14 个调用方；`parseWechatXml`、`wechatVerify`、`wechatMessage`、`OrderGuard` 的入口与调用范围已重新核对；`OrderGuard` 有 6 个调用方（自检脚本与对话核心）。
 5. `.env` 未读取或展开；继续保持凭据不进入文档、日志或版本控制。
 
 ## 6. CodeGraph 索引结果
@@ -148,9 +149,9 @@ src/data/sample.ts
 
 - 索引文件：`.codegraph/`
 - 原目录 `mcd-smart-order` 已为空；其索引同步后显示 0 文件、0 节点、0 边。
-- 当前目录 `mcd-txt-order` 索引已更新且 up-to-date：35 个源码文件、957 个节点、3,173 条边。
-- 本次同步：9 个变更文件（新增 6、修改 3），更新 264 个节点。
-- 核心调用链查询识别 113 个符号，覆盖 6 个文件；微信入口查询识别 48 个符号，覆盖 4 个文件。
+- 当前目录 `mcd-txt-order` 索引已更新且 up-to-date：45 个源码/配置文件、1,227 个节点、3,905 条边；CodeGraph 版本 1.6.0，SQLite WAL 后端。
+- 本次同步：25 个变更文件（新增 10、修改 15），更新 722 个节点。
+- 核心入口查询识别 97 个符号，覆盖 8 个文件；订单下单/幂等查询识别 108 个符号，覆盖 6 个文件；微信安全入口查询识别 90 个符号，覆盖 5 个文件。
 
 交互式查询确认的调用/影响范围：
 

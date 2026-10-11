@@ -231,6 +231,7 @@ ngrok http 8787                  # 微信只回调 80/443 的公网 HTTPS
 
 | 文档 | 内容 |
 |---|---|
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | **当前进度快照**：主链路哪几步已真实跑通、哪几步还没验证、实测数据与下一步顺序 |
 | [`docs/TECHNICAL_NOTES.md`](docs/TECHNICAL_NOTES.md) | **技术要点长文**：实测挖出的 5 个文档未记载的坑、下单链路为何被锁死、真钱之前的五道闸。做 MCP 集成的话建议先看这篇 |
 | [`docs/WECHAT_SETUP.md`](docs/WECHAT_SETUP.md) | 公众号接入分步手册（15 分钟接完，含排错表） |
 | [`docs/WECHAT_TESTING.md`](docs/WECHAT_TESTING.md) | 测试路径选型：为什么不需要麦当劳的公众号开发权 |

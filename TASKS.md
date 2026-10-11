@@ -244,7 +244,7 @@
 - **Docker 现场证据**：本机 `docker compose config --quiet` 通过；`mcd-txt-order` 镜像构建、非 root 启动、`/healthz=200`、持久卷挂载和一次容器重启后的健康检查均通过；验证容器、网络和卷已清理。
 - **容器级幂等证据**：两个独立 Node 容器共享同一临时 SQLite 卷，对同一用户和购物车指纹分别 claim，结果为 `true/false`；测试卷和容器已清理。
 - **Provider schema 证据**：已查阅官方 Create Order 文档；公开入参列出 `storeCode`、`beCode`、`addressId`、`takeWayCode`、`beType`、`reservationDate`、`gmServiceCode`、`items`，未列出幂等键或请求去重契约，因此不能臆造字段接入。
-- **反代配置证据**：官方 `caddy:2-alpine` 对 `deploy/Caddyfile` 执行 `caddy validate` 通过；Nginx 仍需目标机证书文件和真实二进制启动验证。
+- **反代配置证据**：官方 `caddy:2-alpine` 对 `deploy/Caddyfile` 执行 `caddy validate` 通过；Nginx `nginx -t` 已在官方 `nginx:1.27-alpine` 容器内通过。仍需目标机使用真实证书与域名完成启动、切换和回滚验收。
 - **外部回执**：已回读 [活动 Issue #361](https://github.com/M-China/mcd-developer-innovation-challenge/issues/361)：官方评论为“未通过审核”，原因是审核时项目无法访问；当前项目仓库已确认 Public。重新提交尝试收到 GitHub API `403 Resource not accessible by integration`，未创建新 Issue，保持 `S9-A8 🟨`。
 
 #### A1 订单幂等边界
@@ -354,3 +354,23 @@
 - 真实 MCP 链路仅做只读检索、菜单、详情和算价；`create-order` 未调用。
 - **GitHub 状态（2026-10-11 更正）**：`An61/mcd-txt-order` 为 Public；活动仓库 Issue #361 官方回执为“未通过审核，项目无法访问”。GitHub MCP **读**工具可用（`get_me` 返回 An61、`list_commits`、`issue_read` 均成功），但**写**工具 `issue_write` 对活动仓库与本人仓库均返回 403，故**重新提交仍未完成**，需用户手动提交或提供 PAT。报名文案已按官方 `activityGuidelines.md` 的 Issue 格式示例校订（`docs/REGISTRATION_ISSUE.md`，正文 859 字、无图片）。
 - **报名格式已核对（2026-10-11）**：官方规则要求「通过指定 Issue 模板提交」，但对活动仓库查询 `.github` 与 `.github/ISSUE_TEMPLATE` 均返回「路径不存在」，即**当前无模板文件**，按规则正文中的纯文本格式示例提交即可。规则同时要求仓库含 `README.md`、`CONTEST_DECLARATION.md`、`MCP_INTEGRATION.md`、`mcp-config.example.json`、`workbuddy.md` —— 本仓库五项齐备。报名截止 **2026-10-25 23:59**（排行榜数据截止 10-26 00:00）。
+
+### 进度快照复核（2026-10-11 10:38，实测）
+
+对外可读版本见 **`docs/PROGRESS.md`**（README「延伸阅读」已挂链接）。本轮全部为实测，非推断：
+
+| 项 | 结果 |
+|---|---|
+| `npm run doctor` | ✅ 连上 `https://mcp.mcd.cn/`，服务端提供 35 个工具；Token 已配置 |
+| `npm run check` | ✅ **340 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 报名 14 + 礼节 24）。上次那 1 项跳过是时段缺货，本次为 0 |
+| `npm run typecheck` | ✅ 通过 |
+| CI | ✅ 绿；本地 HEAD `1dcefc3` = `origin/master` |
+| 真实链路（预览后取消） | ✅ 门店→菜单→匹配→详情→算价→预览全通，实测 `麦当劳深圳香梅北餐厅 / 猪柳蛋麦满分 ×1 ¥18.00 / 堂食` |
+
+**主链路 6 步：前 5 步真实或自检覆盖 ✅，第 6 步 `create-order` 🟡 未验证（T17，会真花钱，需本人授权）。**
+
+**新增/确认的三条外部事实：**
+
+1. **微信凭据仍全空**：`doctor` 报 `WECHAT_TOKEN`、`AppID/Secret` 均未设置，监听 `127.0.0.1:8787`。代码侧（M4 74 + M8 49 项）全绿，但**无凭据即无真机证据**。→ 下一步走接口测试号，不花钱。
+2. **菜单分时段会让人误判为 bug**：10:30 前 `--item 巨无霸` 返回「没在…菜单里找到巨无霸」，实为早餐时段菜单 92 项无此品。演示需避开早餐时段。
+3. **T17 执行前必须先排除的缺陷**：真实收银台域名若不在 `isSafePaymentUrl` 白名单（`mcd.cn`/`mcd.com.cn`/`mcdonalds.com.cn`），`payUrl` 会被**静默置空**而订单已建。
