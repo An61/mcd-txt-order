@@ -18,12 +18,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.6.0'
+          # 必须是 >= 22.22.2：订单幂等存储依赖内置模块 node:sqlite，
+          # 而该模块在 22.6.0 上抛 ERR_UNKNOWN_BUILTIN_MODULE（CI 曾因此失败）。
+          # 与本地开发版本保持一致，避免「本地绿、CI 红」。
+          node-version: '22.22.2'
           cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm run check:deploy
       - run: npm run check:s9:a1
       - run: npm run check:s9:boundaries
+      # npm run check 已串联 m1~m8 + 报名文案 + 礼节门禁，含 check:release
       - run: npm run check
-      - run: npm run check:release

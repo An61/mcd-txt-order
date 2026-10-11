@@ -6,9 +6,38 @@
  * payment URLs, or raw provider responses.
  */
 
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+
+const nodeRequire = createRequire(import.meta.url);
+
+type SqliteModule = { readonly DatabaseSync: new (path: string) => DatabaseSync };
+
+/**
+ * `node:sqlite` 的可用性随 Node 版本剧烈变化：本机 22.22.2 可直接加载，
+ * 而 22.6.0 抛 `ERR_UNKNOWN_BUILTIN_MODULE`（CI 曾因此失败）。
+ *
+ * 所以这里按需加载而非顶层 import，好处有两个：
+ * 一、把模块原生的 stack trace 换成人话——与 publicError 同源的原则，
+ *    用户不该面对 `ERR_UNKNOWN_BUILTIN_MODULE` 去猜该怎么办；
+ * 二、让「不支持 sqlite 的环境」只在真正用到幂等存储时才失败，
+ *    其余 340 项离线自检（M1/M2/M3/M4/M8/报名/礼节）仍可完整运行。
+ */
+function loadSqlite(): SqliteModule {
+  try {
+    return nodeRequire('node:sqlite') as SqliteModule;
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `当前 Node ${process.versions.node} 无法加载内置模块 node:sqlite，订单幂等存储无法初始化。\n` +
+        `该模块在 Node 22 早期版本不可用（实测 22.6.0 失败、22.22.2 正常），` +
+        `本项目要求 Node >= 22.22.2，见 package.json 的 engines。\n` +
+        `原始错误：${detail}`,
+    );
+  }
+}
 
 export type OrderAttemptState = 'pending' | 'succeeded' | 'failed' | 'unknown';
 
@@ -162,7 +191,8 @@ export class SqliteOrderAttemptStore implements OrderAttemptStore {
   constructor(filePath: string, pendingTimeoutMs = 5 * 60 * 1000) {
     const resolved = filePath === ':memory:' ? filePath : resolve(filePath);
     if (resolved !== ':memory:') mkdirSync(dirname(resolved), { recursive: true });
-    this.db = new DatabaseSync(resolved);
+    const { DatabaseSync: SqliteDatabase } = loadSqlite();
+    this.db = new SqliteDatabase(resolved);
     this.db.exec(`
       PRAGMA busy_timeout = 5000;
       PRAGMA journal_mode = WAL;

@@ -9,7 +9,7 @@
 ## 第 0 步：先确认本地能跑
 
 ```bash
-node --version            # 需 ≥ 22.6
+node --version            # 需 ≥ 22.22.2（订单幂等依赖内置 node:sqlite，22.6 会失败）
 npm run doctor            # 环境体检：Token、门店、菜单是否就绪
 npm run demo              # 离线演示，不花真钱
 ```
