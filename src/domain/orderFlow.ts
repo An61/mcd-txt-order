@@ -250,12 +250,12 @@ async function resolveStore(
       result: fail(
         'need-store',
         '还不知道你在哪个城市。请在 config/favorites.json 里配 rules.defaultCity，' +
-          '或在指令里带上城市（例如「深圳 香梅北 巨无霸」）。',
+          '或在指令里带上城市（例如「示例市 星河 巨无霸」）。',
       ),
     };
   }
   if (!keyword) {
-    return { ok: false, result: fail('need-store', '请问是哪家门店？可以说店名，例如「香梅北」。') };
+    return { ok: false, result: fail('need-store', '请问是哪家门店？可以说店名，例如「星河」。') };
   }
 
   let stores: Store[];
@@ -268,7 +268,7 @@ async function resolveStore(
     return { ok: false, result: fail('store-not-found', `在 ${city} 没找到「${keyword}」附近的门店。`) };
   }
 
-  // 实测：keyword **不会真的按名称过滤**（搜「香梅北」会返回周边一堆店），
+  // 实测：keyword **不会真的按名称过滤**（搜「星河」会返回周边一堆店），
   // 所以必须本地再匹配一次再取最像的那家。「别名的归别名，名单的归名单」。
   const wanted = hint?.favorite.name ?? keyword;
   const best =

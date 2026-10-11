@@ -265,7 +265,7 @@ async function conversationLoop(core: ConversationCore, rl: ReadlineInterface): 
  * 任何脚本都无权替用户按——哪怕只是个 demo。
  */
 async function playDemoScript(core: ConversationCore): Promise<void> {
-  for (const line of ['巨无霸不要酸黄瓜 香梅北', '两个巨无霸一杯可乐 香梅北']) {
+  for (const line of ['巨无霸不要酸黄瓜 星河', '两个巨无霸一杯可乐 星河']) {
     console.log(`你    ${line}`);
     const reply = await core.handle('demo-user', line);
     console.log(`${reply.text.split('\n').map((l) => `      ${l}`).join('\n')}`);
@@ -473,7 +473,7 @@ main().catch((error) => {
     process.exitCode = 1;
     return;
   }
-  console.error('\n执行失败：', error);
+  console.error('\n执行失败：', publicErrorMessage(error));
   process.exitCode = 1;
 });
 

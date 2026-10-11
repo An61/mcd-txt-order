@@ -13,7 +13,7 @@
 import { loadDotEnv } from '../src/env.ts';
 import { createGateway, SampleGateway, RealGateway, GatewayError } from '../src/mcp/gateway.ts';
 import { ConversationCore } from '../src/channel/core.ts';
-import { loadFavorites, defaultCity } from '../src/domain/favorites.ts';
+import { loadFavorites } from '../src/domain/favorites.ts';
 import { buildPreview, renderPreview } from '../src/domain/orderFlow.ts';
 import { getScene, hasPrice, money, type SceneKey } from '../src/domain/types.ts';
 
@@ -81,6 +81,9 @@ function describeError(error: unknown): string {
 }
 
 const HAS_TOKEN = Boolean(process.env.MCD_MCP_TOKEN?.trim());
+const REAL_CITY = process.env.PROBE_CITY?.trim() ?? '';
+const REAL_KEYWORD = process.env.PROBE_KEYWORD?.trim() ?? '';
+const REAL_READY = HAS_TOKEN && REAL_CITY.length > 0 && REAL_KEYWORD.length > 0;
 const favorites = loadFavorites().config;
 
 // ═════════════════════════════════════════════════════════════
@@ -117,7 +120,7 @@ section('T14 真实 / Mock 双网关，且不静默降级');
   const gateway = new SampleGateway();
   const price = await gateway.calculatePrice({
     scene: 'pickup',
-    store: { code: '1420602', name: '麦当劳深圳香梅北餐厅' },
+    store: { code: 'DEMO-STORE-001', name: '示例星河餐厅' },
     items: [{ productCode: '1100', name: '巨无霸', quantity: 1, menuPriceCents: 2650 }],
     needTableware: false,
   });
@@ -137,12 +140,12 @@ async function previewWith(gateway: ReturnType<typeof createGateway>['gateway'],
 }
 
 {
-  const result = await previewWith(new SampleGateway(), '巨无霸不要酸黄瓜 香梅北');
+  const result = await previewWith(new SampleGateway(), '巨无霸不要酸黄瓜 星河');
   if (!result.ok) {
     check('离线编排产出预览', false, `${result.reason}: ${result.message}`);
   } else {
     check('离线编排产出预览', true, `${result.elapsedMs}ms`);
-    check('门店按别名命中到了官方名称', result.preview.cart.store.name === '麦当劳深圳香梅北餐厅',
+    check('门店按别名命中到了官方名称', result.preview.cart.store.name === '示例星河餐厅',
       result.preview.cart.store.name);
     check('餐品命中巨无霸', result.preview.cart.items[0]?.name === '巨无霸');
     check('特制被解析出来', result.preview.cart.items[0]?.specText === '不要酸黄瓜',
@@ -152,7 +155,7 @@ async function previewWith(gateway: ReturnType<typeof createGateway>['gateway'],
       result.preview.fingerprint.length >= 12,
       `${result.preview.fingerprint.length} 字符`,
     );
-    const again = await previewWith(new SampleGateway(), '巨无霸不要酸黄瓜 香梅北');
+    const again = await previewWith(new SampleGateway(), '巨无霸不要酸黄瓜 星河');
     check(
       '同一购物车两次建预览指纹一致（幂等可依赖）',
       again.ok && again.preview.fingerprint === result.preview.fingerprint,
@@ -162,7 +165,7 @@ async function previewWith(gateway: ReturnType<typeof createGateway>['gateway'],
 }
 
 {
-  const result = await previewWith(new SampleGateway(), '两个巨无霸一杯可乐 香梅北');
+  const result = await previewWith(new SampleGateway(), '两个巨无霸一杯可乐 星河');
   check(
     '多品与数量解析正确',
     result.ok &&
@@ -174,7 +177,7 @@ async function previewWith(gateway: ReturnType<typeof createGateway>['gateway'],
 }
 
 {
-  const result = await previewWith(new SampleGateway(), '仰望星空派 香梅北');
+  const result = await previewWith(new SampleGateway(), '仰望星空派 星河');
   check('不存在的餐品给出人话失败而非异常', !result.ok && result.reason === 'item-not-found',
     result.ok ? '' : result.message);
 }
@@ -190,7 +193,7 @@ section('T19 会话核心闭环（预览 → 确认 → 下单）');
 {
   const core = new ConversationCore({ bundle: createGateway('sample') });
 
-  const first = await core.handle('u1', '巨无霸 香梅北');
+  const first = await core.handle('u1', '巨无霸 星河');
   check('首次发言产出预览卡片', first.kind === 'preview', first.kind);
   check('预览带演示模式标识（不误导用户）', first.text.includes('演示模式'));
 
@@ -209,7 +212,7 @@ section('T19 会话核心闭环（预览 → 确认 → 下单）');
 
 {
   const core = new ConversationCore({ bundle: createGateway('sample') });
-  await core.handle('u2', '巨无霸 香梅北');
+  await core.handle('u2', '巨无霸 星河');
   const cancelled = await core.handle('u2', '算了');
   check('取消走取消分支', cancelled.kind === 'cancelled', cancelled.text);
 
@@ -240,19 +243,19 @@ section('T16 / T18 takeWayCode 与特制');
 }
 
 // ═════════════════════════════════════════════════════════════
-if (HAS_TOKEN) {
+if (REAL_READY) {
   section('真实链路（只读）：门店 → 菜单 → 详情 → 算价');
 
   const real = createGateway('real');
-  const city = defaultCity(favorites);
-  check('已配置兜底城市', Boolean(city), city ?? '');
+  const city = REAL_CITY;
+  check('已配置真实探针城市', city.length > 0, city);
 
   try {
-    const stores = await real.gateway.listStores({ scene: 'pickup', city, keyword: '香梅北' });
+    const stores = await real.gateway.listStores({ scene: 'pickup', city, keyword: REAL_KEYWORD });
     check('真实门店检索有结果', stores.length > 0, `${stores.length} 家`);
 
     // 实测：keyword 不会真的按名称过滤，本地必须能挑出最像的那家
-    const picked = stores.find((s) => s.name.includes('香梅北'));
+    const picked = stores[0];
     check('候选池里能找到目标门店', Boolean(picked), picked?.name ?? '未找到');
 
     if (picked) {
@@ -346,7 +349,19 @@ if (HAS_TOKEN) {
       // 端到端必须用**此刻真实在售**的品名，而不是硬编码品名
       const e2eName = preferred?.name ?? chosen?.name;
       if (e2eName) {
-        const flow = await previewWith(real.gateway, `${e2eName} 香梅北`);
+        const realFavorites = {
+          ...favorites,
+          defaultStore: picked.name,
+          stores: [{ alias: [REAL_KEYWORD, picked.name], name: picked.name, city: REAL_CITY }],
+          rules: { ...favorites.rules, defaultCity: REAL_CITY },
+        };
+        const flow = await buildPreview({
+          gateway: real.gateway,
+          favorites: realFavorites,
+          rawText: `${e2eName} ${REAL_KEYWORD}`,
+          pinnedStoreCode: picked.code,
+          scene: 'pickup',
+        });
         check(
           '端到端：真实网关也能产出预览',
           flow.ok && flow.preview.price.payableCents > 0,
@@ -376,13 +391,13 @@ if (HAS_TOKEN) {
   }
 } else {
   section('真实链路');
-  console.log('  ℹ️  未检测到 MCD_MCP_TOKEN，跳过真实链路验证（离线断言已全部覆盖编排逻辑）。');
+  console.log('  ℹ️  未配置 MCD_MCP_TOKEN、PROBE_CITY、PROBE_KEYWORD，跳过真实链路验证（不会把合成门店用于真实服务）。');
 }
 
 // ═════════════════════════════════════════════════════════════
 console.log(`\n${'═'.repeat(50)}`);
 console.log(
-  `M3 自检：通过 ${passed} 项，失败 ${failed} 项，跳过 ${skipped} 项${HAS_TOKEN ? '（含真实链路）' : '（离线）'}`,
+  `M3 自检：通过 ${passed} 项，失败 ${failed} 项，跳过 ${skipped} 项${REAL_READY ? '（含真实链路）' : '（离线）'}`,
 );
 console.log('═'.repeat(50));
 

@@ -122,7 +122,7 @@ section('T21 XML 解析与被动回复');
     '<FromUserName><![CDATA[oAbc]]></FromUserName>',
     '<CreateTime>1700000000</CreateTime>',
     '<MsgType><![CDATA[text]]></MsgType>',
-    '<Content><![CDATA[巨无霸 香梅北]]></Content>',
+    '<Content><![CDATA[巨无霸 星河]]></Content>',
     '<MsgId>1234567890</MsgId>',
     '</xml>',
   ].join('');
@@ -130,7 +130,7 @@ section('T21 XML 解析与被动回复');
   const parsed = parseWechatXml(xml);
   check('解析 ToUserName', parsed.ToUserName === 'gh_123');
   check('解析 FromUserName', parsed.FromUserName === 'oAbc');
-  check('解析 Content（去 CDATA）', parsed.Content === '巨无霸 香梅北');
+  check('解析 Content（去 CDATA）', parsed.Content === '巨无霸 星河');
   check('解析 MsgId', parsed.MsgId === '1234567890');
 
   const entity = parseWechatXml('<xml><Content><![CDATA[a &amp; b]]></Content></xml>');
@@ -187,7 +187,7 @@ section('T20 网页模拟器');
   check('不引外部样式/字体', !/<link[^>]+href=/i.test(html));
   check('含对话接口调用', html.includes('/api/chat'));
   check('模式标签被注入', html.includes('演示模式'));
-  check('预设指令包含主场景', html.includes('巨无霸不要酸黄瓜 香梅北'));
+  check('预设指令包含主场景', html.includes('巨无霸不要酸黄瓜 星河'));
 
   const escaped = renderMockPage('<img src=x onerror=alert(1)>');
   check('模式标签做了 HTML 转义（防注入）', !escaped.includes('<img src=x'));
@@ -226,12 +226,12 @@ check('服务成功监听', port > 0, String(port));
   const res = await fetch(`${base}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: 'web-test-1', text: '巨无霸 香梅北' }),
+    body: JSON.stringify({ userId: 'web-test-1', text: '巨无霸 星河' }),
   });
   const body = (await res.json()) as { text?: string; kind?: string };
   check('对话接口返回 200', res.status === 200);
   check('对话接口给出预览卡片', body.kind === 'preview', String(body.kind));
-  check('预览里有真实门店名', (body.text ?? '').includes('香梅北'));
+  check('预览里有真实门店名', (body.text ?? '').includes('星河'));
   check('预览里有金额', /¥|元/.test(body.text ?? ''));
 
   const bad = await fetch(`${base}/api/chat`, {
@@ -293,21 +293,21 @@ function textXml(content: string, msgId: string, openId = 'oUser1'): string {
 }
 
 {
-  const res = await postWechat(textXml('巨无霸 香梅北', '111000111'));
+  const res = await postWechat(textXml('巨无霸 星河', '111000111'));
   const text = await res.text();
   check('文字消息返回被动回复 XML', res.status === 200 && text.includes('<MsgType><![CDATA[text]]></MsgType>'));
   check('回复定向到发消息的用户', text.includes('<ToUserName><![CDATA[oUser1]]></ToUserName>'));
 
   const replyText = parseWechatXml(text).Content ?? '';
-  check('回复内容是预览卡片', replyText.includes('香梅北'), replyText.slice(0, 60));
+  check('回复内容是预览卡片', replyText.includes('星河'), replyText.slice(0, 60));
 
   // 微信重试：同一 MsgId 再来两次
-  const retry1 = await postWechat(textXml('巨无霸 香梅北', '111000111'));
-  const retry2 = await postWechat(textXml('巨无霸 香梅北', '111000111'));
+  const retry1 = await postWechat(textXml('巨无霸 星河', '111000111'));
+  const retry2 = await postWechat(textXml('巨无霸 星河', '111000111'));
   check('重试 1 被去重拦下（回 success）', (await retry1.text()) === 'success');
   check('重试 2 被去重拦下（回 success）', (await retry2.text()) === 'success');
 
-  const fresh = await postWechat(textXml('巨无霸 香梅北', '222000222'));
+  const fresh = await postWechat(textXml('巨无霸 星河', '222000222'));
   check('新 MsgId 正常处理', (await fresh.text()).includes('<MsgType>'));
 
   const forged = await postWechat(textXml('巨无霸', '333'), 'forged-signature');
@@ -354,7 +354,7 @@ section('FR-21 5 秒超时 → success + 异步送达');
   const slowAddr = inst.address();
   const slowBase = `http://127.0.0.1:${typeof slowAddr === 'object' && slowAddr ? slowAddr.port : 0}`;
 
-  const res = await postWechat(textXml('巨无霸 香梅北', '900000001', 'oSlow'), undefined, slowBase);
+  const res = await postWechat(textXml('巨无霸 星河', '900000001', 'oSlow'), undefined, slowBase);
   const text = await res.text();
   check('超时时立即回 success（官方推荐，可抑制重试）', text === 'success', text.slice(0, 40));
 

@@ -8,7 +8,8 @@ export interface ErrorSignals {
 }
 
 export function publicErrorMessage(error: unknown, fallback = '服务暂时不可用，请稍后再试。'): string {
-  const signals = error as ErrorSignals;
+  const signals: ErrorSignals =
+    error !== null && typeof error === 'object' ? (error as ErrorSignals) : {};
   if (signals.authFailed === true || signals.httpStatus === 401 || signals.httpStatus === 403) {
     return '登录信息已失效，请重新配置 Token 后再试。';
   }

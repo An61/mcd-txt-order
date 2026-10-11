@@ -87,13 +87,13 @@ section('EncodingAESKey 解析');
 section('加解密往返（AES-256-CBC + PKCS#7@32）');
 
 {
-  const plain = '<xml><ToUserName><![CDATA[gh_x]]></ToUserName><Content><![CDATA[巨无霸 香梅北]]></Content></xml>';
+  const plain = '<xml><ToUserName><![CDATA[gh_x]]></ToUserName><Content><![CDATA[巨无霸 星河]]></Content></xml>';
   const cipherText = crypto.encrypt(plain);
   const back = crypto.decrypt(cipherText);
   check('加密再解密能还原原文', back === plain);
   check('密文是 base64', /^[A-Za-z0-9+/]+={0,2}$/.test(cipherText));
   check('密文长度是 32 字节的整数倍', Buffer.from(cipherText, 'base64').length % 32 === 0);
-  check('中文不会丢字符', back.includes('巨无霸 香梅北'));
+  check('中文不会丢字符', back.includes('巨无霸 星河'));
 
   // 两次加密结果必须不同（16 字节随机前缀），否则等于把 IV 写死了
   check('相同明文两次加密结果不同（随机前缀生效）', crypto.encrypt(plain) !== cipherText);
@@ -332,7 +332,7 @@ function buildServer(options: {
 
   const chatRes = await fetch(`http://127.0.0.1:${port}/api/chat`, {
     method: 'POST',
-    body: JSON.stringify({ text: '巨无霸 香梅北' }),
+    body: JSON.stringify({ text: '巨无霸 星河' }),
   });
   check('对外模式下 /api/chat 返回 404', chatRes.status === 404, `实际 ${chatRes.status}`);
 
@@ -362,7 +362,7 @@ function buildServer(options: {
 section('关注欢迎语');
 
 {
-  check('欢迎语说明了用法', WELCOME_TEXT.includes('巨无霸 香梅北'));
+  check('欢迎语说明了用法', WELCOME_TEXT.includes('巨无霸 星河'));
   check('欢迎语提示需要确认才会下单', WELCOME_TEXT.includes('确认'));
   check('欢迎语提示帮助入口', WELCOME_TEXT.includes('帮助'));
   check('欢迎语长度适合手机阅读（<300 字）', WELCOME_TEXT.length < 300, `实际 ${WELCOME_TEXT.length}`);

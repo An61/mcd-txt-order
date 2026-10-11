@@ -16,6 +16,13 @@ import {
 
 loadDotEnv();
 
+const PROBE_CITY = process.env.PROBE_CITY?.trim() ?? '';
+const PROBE_KEYWORD = process.env.PROBE_KEYWORD?.trim() ?? '';
+if (!process.env.MCD_MCP_TOKEN || !PROBE_CITY || !PROBE_KEYWORD) {
+  console.log('跳过真实订单链探针：请显式设置 MCD_MCP_TOKEN、PROBE_CITY、PROBE_KEYWORD；不会使用示例位置调用服务。');
+  process.exit(0);
+}
+
 const OUT_DIR = resolve(findProjectRoot(), '.cache', 'probe');
 mkdirSync(OUT_DIR, { recursive: true });
 
@@ -65,21 +72,21 @@ async function main(): Promise<void> {
   save('chain-stores-favorite.json', favoritesProbe);
   console.log(preview(favoritesProbe, 900));
 
-  console.log('\n2) query-nearby-stores  searchType=1 + keyword=香梅北（审计 F-07 待验证组合）');
+  console.log(`\n2) query-nearby-stores  searchType=1 + keyword=${PROBE_KEYWORD}（审计 F-07 待验证组合）`);
   const keywordFavorite = await callRead(client, 'query-nearby-stores', {
     beType: 1,
     searchType: 1,
-    keyword: '香梅北',
+    keyword: PROBE_KEYWORD,
   });
   save('chain-stores-keyword-favorite.json', keywordFavorite);
   console.log(preview(keywordFavorite, 700));
 
-  console.log('\n3) query-nearby-stores  searchType=2 + city=深圳 + keyword=香梅北');
+  console.log(`\n3) query-nearby-stores  searchType=2 + city=${PROBE_CITY} + keyword=${PROBE_KEYWORD}`);
   const keywordLocation = await callRead(client, 'query-nearby-stores', {
     beType: 1,
     searchType: 2,
-    city: '深圳',
-    keyword: '香梅北',
+    city: PROBE_CITY,
+    keyword: PROBE_KEYWORD,
   });
   save('chain-stores-keyword-location.json', keywordLocation);
   console.log(preview(keywordLocation, 900));

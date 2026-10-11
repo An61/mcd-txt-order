@@ -1,9 +1,9 @@
 /**
  * 生成离线示例数据集 `src/data/sample.ts`。
  *
- * 数据源来自**真实 MCP 探针产出的快照**（`.cache/probe/`，已 gitignore）。
- * 这样做的好处：没 Token 的评审者 clone 下来，`npm run demo` 里
- * 「巨无霸 香梅北」命中的是**真实门店与真实价格**，而不是手编的假数据。
+ * 菜单和价格来自本地 MCP 探针快照（`.cache/probe/`，已 gitignore）。
+ * 门店位置字段始终由本脚本生成合成示例，避免把探针中的个人位置元数据
+ * 再导出到公开的 `src/data/sample.ts`。
  *
  * 用法：node --experimental-strip-types scripts/gen-sample.ts
  */
@@ -42,17 +42,6 @@ async function main(): Promise<void> {
   const menuPayload = readJson<{ data: { categories: RawCategory[]; meals: Record<string, RawMeal> } }>(
     'chain2-meals-reserved-lunch.json',
   );
-  const storePayload = readJson<{
-    data: {
-      storeCode: string;
-      storeName: string;
-      address: string;
-      distance: number;
-      businessStatus: boolean;
-      businessStartTime: string;
-      businessEndTime: string;
-    }[];
-  }>('chain-stores-keyword-location.json');
   const detailPayload = readJson<{ data: Record<string, unknown> }>('chain2-detail-reserved-lunch.json');
 
   const dict = menuPayload.data.meals;
@@ -88,12 +77,22 @@ async function main(): Promise<void> {
     return `  { name: '${escapeString(category.name)}', codes: [${codes}] },`;
   });
 
-  const storeLines = storePayload.data.slice(0, 8).map((store) => {
+  // Never copy storeCode/name/address/distance/city from a probe payload.
+  // Keep exactly five stable synthetic rows so rerunning this script cannot
+  // re-export a real location while preserving historical menu prices above.
+  const syntheticStores = [
+    { code: 'DEMO-STORE-001', name: '示例星河餐厅', address: '示例星河大道 1 号', distance: 120, openTime: '06:00', closeTime: '23:00' },
+    { code: 'DEMO-STORE-002', name: '示例云杉餐厅', address: '示例云杉路 2 号', distance: 480, openTime: '06:30', closeTime: '23:30' },
+    { code: 'DEMO-STORE-003', name: '示例晨曦餐厅', address: '示例晨曦街 3 号', distance: 860, openTime: '07:00', closeTime: '22:30' },
+    { code: 'DEMO-STORE-004', name: '示例湖畔餐厅', address: '示例湖畔路 4 号', distance: 1250, openTime: '07:30', closeTime: '22:00' },
+    { code: 'DEMO-STORE-005', name: '示例松风餐厅', address: '示例松风路 5 号', distance: 1600, openTime: '08:00', closeTime: '21:30' },
+  ] as const;
+  const storeLines = syntheticStores.map((store) => {
     return (
-      `  { code: '${store.storeCode}', name: '${escapeString(store.storeName)}', ` +
+      `  { code: '${store.code}', name: '${escapeString(store.name)}', ` +
       `address: '${escapeString(store.address)}', distance: ${store.distance}, ` +
-      `city: '深圳', open: ${store.businessStatus === true}, ` +
-      `openTime: '${store.businessStartTime}', closeTime: '${store.businessEndTime}' },`
+      `city: '示例市', open: true, ` +
+      `openTime: '${store.openTime}', closeTime: '${store.closeTime}' },`
     );
   });
 
@@ -106,8 +105,8 @@ async function main(): Promise<void> {
  * 内置示例数据 —— **仅供离线演示**（T9）。
  *
  * ⚠️ 重要说明：
- * 1. 本文件数据是从麦当劳 MCP **真实探针快照**生成的（门店、菜单、价格均来自真实响应），
- *    但它是某一时刻的**快照**，已经可能过时，**不代表当前营业状态与实时价格**。
+ * 1. 菜单和价格来自本地探针快照；门店名称、编码、地址和距离由本脚本生成合成示例，
+ *    不代表任何真实门店或实时营业状态。
  * 2. 它不是官方发布的数据源。真实使用时一律以 \`query-meals\` 与 \`query-nearby-stores\`
  *    的实时返回为准，本文件仅服务于「没有 Token 也能跑通演示」这一个目的。
  * 3. **不含任何凭据**（无 Token、无配送地址、无账号信息），可安全随仓库分发。
@@ -158,8 +157,8 @@ export const SAMPLE_STORES: readonly Store[] = SAMPLE_STORE_ROWS.map((row) => ({
   supportsReservation: true,
 }));
 
-/** 演示默认门店：与 config/favorites.example.json 里的「福田香梅北」对应 */
-export const SAMPLE_DEFAULT_STORE_CODE = '${storePayload.data[0]?.storeCode ?? ''}';
+/** 演示默认门店：与 config/favorites.example.json 里的「示例星河」对应 */
+export const SAMPLE_DEFAULT_STORE_CODE = 'DEMO-STORE-001';
 
 // ─────────────────────────────────────────────────────────────
 // 菜单
@@ -250,7 +249,7 @@ export const SAMPLE_NUTRITION: ParseNutritionResult = { records: [], skipped: 0,
   console.log('  以上计数变量仅为日志占位，实际内容已写入文件。');
 }
 
-const SAMPLE_STORE_COUNT = 8;
+const SAMPLE_STORE_COUNT = 5;
 
 main().catch((error: unknown) => {
   console.error('生成失败：', error);

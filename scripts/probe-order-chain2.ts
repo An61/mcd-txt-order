@@ -18,10 +18,16 @@ import {
 
 loadDotEnv();
 
+const PROBE_STORE_CODE = process.env.PROBE_STORE_CODE?.trim() ?? '';
+if (!process.env.MCD_MCP_TOKEN || !PROBE_STORE_CODE) {
+  console.log('跳过真实菜单链探针：请显式设置 MCD_MCP_TOKEN、PROBE_STORE_CODE；不会使用合成门店调用服务。');
+  process.exit(0);
+}
+
 const OUT_DIR = resolve(findProjectRoot(), '.cache', 'probe');
 mkdirSync(OUT_DIR, { recursive: true });
 
-const STORE_CODE = process.env.PROBE_STORE_CODE || '1420602';
+const STORE_CODE = PROBE_STORE_CODE;
 
 function save(name: string, value: unknown): void {
   writeFileSync(resolve(OUT_DIR, name), JSON.stringify(value, null, 2), 'utf8');

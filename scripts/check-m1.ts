@@ -73,11 +73,11 @@ const readProbe = (name: string): unknown => {
 section('T5 容忍式字段归一（读真实探针快照）');
 
 const storesPayload = readProbe('chain-stores-keyword-location.json');
-const stores = parseStores(storesPayload, '深圳');
+const stores = parseStores(storesPayload, '示例市');
 check('门店解析出结果', stores.length > 0, `共 ${stores.length} 家`);
 check(
   'storeCode / storeName 正确',
-  stores[0]?.code === '1420602' && stores[0]?.name === '麦当劳深圳香梅北餐厅',
+  stores[0]?.code === 'DEMO-STORE-001' && stores[0]?.name === '示例星河餐厅',
   `${stores[0]?.code} ${stores[0]?.name}`,
 );
 check('distance 是数字（米）', typeof stores[0]?.distanceMeters === 'number', String(stores[0]?.distanceMeters));
@@ -92,7 +92,7 @@ check(
 );
 
 const menuPayload = readProbe('chain2-meals-reserved-lunch.json');
-const menu = parseMenu(menuPayload, '1420602');
+const menu = parseMenu(menuPayload, 'DEMO-STORE-001');
 const bigMac = menu.items.find((item) => item.code === '1100');
 check('菜单条目齐全', menu.items.length > 100, `共 ${menu.items.length} 条`);
 check('分类与字典能对齐（巨无霸有名字）', bigMac?.name === '巨无霸', bigMac?.name ?? '(未找到)');
@@ -172,15 +172,15 @@ const favoritesResult = loadFavorites();
 check('收藏配置加载成功', favoritesResult.config.stores.length > 0, `来源 ${favoritesResult.sourcePath.split(/[\\/]/).pop()}`);
 check('缺文件时回退到示例且有提示', favoritesResult.warnings.length === 0 || favoritesResult.usedFallback);
 
-const hint = resolveStoreAlias('巨无霸 香梅北', favoritesResult.config);
-check('用户在句子里说「香梅北」能命中别名', hint?.alias === '香梅北' && hint?.favorite.name === '麦当劳深圳香梅北餐厅',
+const hint = resolveStoreAlias('巨无霸 星河', favoritesResult.config);
+check('用户在句子里说「星河」能命中别名', hint?.alias === '星河' && hint?.favorite.name === '示例星河餐厅',
   hint?.favorite.name ?? '(未命中)');
 check('命中后剩余文本是纯餐品', hint?.rest === '巨无霸', hint?.rest ?? '');
 
-const nested = resolveStoreAlias('福田香梅北', favoritesResult.config);
-check('长别名优先（福田香梅北 > 香梅北）', nested?.alias === '福田香梅北', nested?.alias ?? '(未命中)');
+const nested = resolveStoreAlias('示例星河', favoritesResult.config);
+check('长别名优先（示例星河 > 星河）', nested?.alias === '示例星河', nested?.alias ?? '(未命中)');
 
-check('默认门店可解析', defaultStoreFavorite(favoritesResult.config)?.name === '麦当劳深圳香梅北餐厅',
+check('默认门店可解析', defaultStoreFavorite(favoritesResult.config)?.name === '示例星河餐厅',
   defaultStoreFavorite(favoritesResult.config)?.name ?? '(无)');
 
 // ─────────────────────────────────────────────────────────────
@@ -274,10 +274,10 @@ check('无法识别的诉求如实返回 unmatched', bogus.unmatched.length === 
 // ─────────────────────────────────────────────────────────────
 section('端到端：模拟一句用户原话');
 
-const utterance = '两个巨无霸一杯可乐 香梅北';
+const utterance = '两个巨无霸一杯可乐 星河';
 const storeHint = resolveStoreAlias(utterance, favorites);
 const specs = parseItemSpecs(storeHint?.rest ?? utterance);
-check('门店被切出', storeHint?.favorite.name === '麦当劳深圳香梅北餐厅', storeHint?.favorite.name ?? '');
+check('门店被切出', storeHint?.favorite.name === '示例星河餐厅', storeHint?.favorite.name ?? '');
 check(
   '剩余文本解析出两个餐品且数量正确',
   specs.length === 2 && specs.some((s) => s.name === '巨无霸' && s.quantity === 2) &&

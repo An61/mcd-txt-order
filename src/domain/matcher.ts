@@ -20,7 +20,7 @@ export type MatchLevel = 'exact' | 'alias' | 'contains' | 'fuzzy';
 export interface MatchCandidate {
   readonly id: string;
   readonly name: string;
-  /** 用户自定义别名，可含中文别名与拼音缩写（jwb / xmbei） */
+  /** 用户自定义别名，可含中文别名与拼音缩写（jwb / xinghe） */
   readonly aliases?: readonly string[];
   readonly tags?: readonly string[];
 }

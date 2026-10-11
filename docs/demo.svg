@@ -13,14 +13,14 @@
     <circle cx="693" cy="107" r="17" fill="#C8C8C8"/>
     <rect x="456" y="88" width="210" height="38" rx="8" fill="#95EC69"/>
     <path d="M666 98 L674 94 L674 110 Z" fill="#95EC69"/>
-    <text x="470" y="112" font-size="15" fill="#191919">巨无霸不要酸黄瓜 香梅北</text>
+    <text x="470" y="112" font-size="15" fill="#191919">巨无霸不要酸黄瓜 星河</text>
 
     <!-- ② 助手：预览卡片 -->
     <circle cx="57" cy="152" r="17" fill="#C8C8C8"/>
     <rect x="84" y="134" width="440" height="276" rx="10" fill="#FFFFFF"/>
     <path d="M84 148 L74 144 L74 158 Z" fill="#FFFFFF"/>
 
-    <text x="100" y="162" font-size="15" font-weight="600" fill="#191919">📍 麦当劳深圳香梅北餐厅</text>
+    <text x="100" y="162" font-size="15" font-weight="600" fill="#191919">📍 示例星河餐厅</text>
     <text x="100" y="181" font-size="12" fill="#8C8C8C">距离约 374m　·　到店自提</text>
     <line x1="100" y1="195" x2="508" y2="195" stroke="#E6E6E6" stroke-width="1"/>
 

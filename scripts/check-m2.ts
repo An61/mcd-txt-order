@@ -455,7 +455,7 @@ function kindOf(text: string, ctx: Partial<IntentContext> = {}): string {
   return classifyIntent(text, { state: 'idle', ...ctx }).kind;
 }
 
-check('「巨无霸 香梅北」识别为下单', kindOf('巨无霸 香梅北') === 'order');
+check('「巨无霸 星河」识别为下单', kindOf('巨无霸 星河') === 'order');
 check('「两个巨无霸一杯可乐」识别为下单', kindOf('两个巨无霸一杯可乐') === 'order');
 check(
   '「巨无霸不要酸黄瓜」识别为下单而非取消',
@@ -474,7 +474,7 @@ check('待确认态的「确认」是确认', kindOf('确认', { state: 'confirm
 check('待确认态的「OK」是确认', kindOf('ok', { state: 'confirming' }) === 'confirm');
 check(
   '待确认态重复原话视为确认',
-  kindOf('巨无霸 香梅北', { state: 'confirming', draftRawText: '巨无霸 香梅北' }) === 'confirm',
+  kindOf('巨无霸 星河', { state: 'confirming', draftRawText: '巨无霸 星河' }) === 'confirm',
 );
 const strayConfirm = classifyIntent('好的', { state: 'idle' });
 check(
@@ -495,7 +495,7 @@ check('「第二个」取到下标 2', readPickIndex('第二个', '第二个') =
 check('非澄清态的「1」不当候选', kindOf('1') === 'order');
 check('「1份巨无霸」不会被当成选候选', kindOf('1份巨无霸') === 'order');
 
-check('「默认门店改成香梅北」是改配置', kindOf('默认门店改成香梅北') === 'config');
+check('「默认门店改成星河」是改配置', kindOf('默认门店改成星河') === 'config');
 check('「切换门店」是改配置', kindOf('切换门店') === 'config');
 
 check('「附近门店」是查询', kindOf('附近门店') === 'query');

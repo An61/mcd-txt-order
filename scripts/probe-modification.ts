@@ -17,10 +17,16 @@ import {
 
 loadDotEnv();
 
+const PROBE_STORE_CODE = process.env.PROBE_STORE_CODE?.trim() ?? '';
+if (!process.env.MCD_MCP_TOKEN || !PROBE_STORE_CODE) {
+  console.log('跳过真实特制探针：请显式设置 MCD_MCP_TOKEN、PROBE_STORE_CODE；不会使用合成门店调用服务。');
+  process.exit(0);
+}
+
 const OUT_DIR = resolve(findProjectRoot(), '.cache', 'probe');
 mkdirSync(OUT_DIR, { recursive: true });
 
-const STORE_CODE = process.env.PROBE_STORE_CODE || '1420602';
+const STORE_CODE = PROBE_STORE_CODE;
 const MEAL_CODE = '1100'; // 巨无霸（午餐菜单）
 
 async function callRead(

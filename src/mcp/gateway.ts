@@ -3,10 +3,10 @@
  *
  * 两个实现：
  *   - `createRealGateway()`：走 `https://mcp.mcd.cn` 真实调用
- *   - `createSampleGateway()`：走 `src/data/sample.ts` 真实探针快照，**完全离线**
+ *   - `createSampleGateway()`：走 `src/data/sample.ts` 的菜单价格快照与合成门店，**完全离线**
  *
  * ### 为什么 Mock 数据用真实快照而不是编的
- * 审查者 clone 下来没有 Token 时，跑 `巨无霸 香梅北` 命中的是**真实存在过的门店和真实价格**。
+ * 审查者 clone 下来没有 Token 时，跑示例请求命中的是合成门店与历史菜单价格示例。
  * 编造的假数据会让演示变成自娱自乐，真实快照才能让"它能用"这件事有说服力。
  *
  * ### 关于静默降级（SEC / T14 的红线）
@@ -181,7 +181,7 @@ export class RealGateway implements DataGateway {
       city: query.city,
       keyword: query.keyword,
     });
-    // 实测：keyword **并不真的按名称过滤**（搜「香梅北」会返回周边一堆店），
+    // 实测：keyword **并不真的按名称过滤**（指定关键词会返回周边一堆店），
     // 所以这里返回候选池，由上层用 matcher 做名称/别名匹配，不能直接用第一条。
     return parseStores(payload, query.city);
   }
@@ -264,6 +264,7 @@ export class RealGateway implements DataGateway {
 
   private async call(tool: string, args: Record<string, unknown>): Promise<unknown> {
     let payload: unknown;
+    const isCreateOrder = tool === 'create-order';
     try {
       payload = unwrapToolResult((await this.client.callTool(tool, args)) as McpCallResult);
     } catch (error) {
@@ -274,12 +275,17 @@ export class RealGateway implements DataGateway {
       };
       // 401/403 必须让上层知道，用于 SEC-7 冻结
       if (candidate.authFailed === true || candidate.httpStatus === 401 || candidate.httpStatus === 403) {
-        throw new GatewayError('MCP 认证失败。', { authFailed: true, ambiguous: candidate.ambiguous === true });
+        throw new GatewayError('MCP 认证失败。', {
+          authFailed: true,
+          ambiguous: candidate.ambiguous === true || isCreateOrder,
+        });
       }
       if (candidate.ambiguous === true) {
         throw new GatewayError('MCP 请求超时或连接中断。', { ambiguous: true });
       }
-      throw new GatewayError('MCP 服务暂时不可用。');
+      // A write may have reached the provider before the client observed an
+      // error. Never turn that uncertainty into a retryable failed state.
+      throw new GatewayError('MCP 服务暂时不可用。', { ambiguous: isCreateOrder });
     }
 
     const view = readEnvelope(payload);
@@ -394,7 +400,7 @@ export function createGateway(mode: GatewayMode = 'auto'): GatewayBundle {
   if (!token) {
     return {
       gateway: new SampleGateway(),
-      reason: '未检测到 MCD_MCP_TOKEN，已进入演示模式（数据来自真实探针快照，不会真的下单）',
+      reason: '未检测到 MCD_MCP_TOKEN，已进入演示模式（合成门店与历史菜单价格，不会真的下单）',
     };
   }
   return { gateway: new RealGateway(), reason: '检测到 Token，使用真实 MCP' };

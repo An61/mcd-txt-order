@@ -420,11 +420,17 @@ export function parseOrderResult(payload: Unknown): { orderId: string; payUrl: s
   if (!isRecord(data)) return undefined;
   const orderId = pickString(data, ['orderId', 'orderNo', 'orderCode']);
   const candidateUrl = pickString(data, ['payUrl', 'payLink', 'paymentUrl', 'cashierUrl', 'url']);
-  if (!orderId) return undefined;
-  return { orderId, payUrl: isSafePaymentUrl(candidateUrl) ? candidateUrl! : '', raw: data };
+  if (!orderId || !isSafePaymentUrl(candidateUrl)) return undefined;
+  return { orderId, payUrl: candidateUrl, raw: data };
 }
 
-const DEFAULT_PAYMENT_HOSTS = ['example.invalid', 'mcd.cn', 'mcd.com.cn', 'mcdonalds.com.cn'];
+const DEFAULT_PAYMENT_HOSTS = [
+  'example.invalid',
+  'pay.mcd.cn',
+  'mcd.cn',
+  'mcd.com.cn',
+  'mcdonalds.com.cn',
+];
 
 /**
  * Payment links are never accepted from arbitrary protocols or hosts. The
@@ -448,8 +454,11 @@ export function isSafePaymentUrl(value: string | undefined): value is string {
   const allowed = configured && configured.length > 0 ? configured : DEFAULT_PAYMENT_HOSTS;
   const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
   return allowed.some((host) => {
+    const wildcard = host.startsWith('*.');
     const normalized = host.replace(/^\*\./, '').replace(/\.$/, '');
-    return hostname === normalized || hostname.endsWith(`.${normalized}`);
+    return wildcard
+      ? hostname === normalized || hostname.endsWith(`.${normalized}`)
+      : hostname === normalized;
   });
 }
 

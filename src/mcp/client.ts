@@ -151,6 +151,8 @@ export class McpStreamableHttpClient {
     }
     return new McpError(`MCP 请求失败（HTTP ${response.status}）。`, {
       httpStatus: response.status,
+      // A 5xx response does not prove that the provider rejected a write.
+      ambiguous: response.status >= 500,
     });
   }
 
@@ -228,7 +230,9 @@ export class McpStreamableHttpClient {
   }
 }
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+// Keep insecure HTTP opt-in bound to IP literals. `localhost` is omitted because
+// hostname resolution can be changed by local DNS/hosts configuration.
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]']);
 
 function validateMcpUrl(value: string, allowInsecureLoopback: boolean): string {
   if (value.length > 2_048 || /[\u0000-\u001f\u007f]/.test(value)) {

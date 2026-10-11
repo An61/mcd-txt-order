@@ -161,7 +161,7 @@ export function diceCoefficient(a: string, b: string): number {
 
 /**
  * 判断 `short` 是否为 `long` 的子序列（允许缺字，保序）。
- * 例如 "小区便利" 是 "深圳小区便利店" 的子序列 —— 对付漏字很好用。
+ * 例如 "小区便利" 是 "示例市小区便利店" 的子序列 —— 对付漏字很好用。
  */
 export function isSubsequence(short: string, long: string): boolean {
   let i = 0;

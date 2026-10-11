@@ -1,24 +1,24 @@
 {
   "_readme": "别名映射表。复制本文件为 favorites.json 后自定义。这里的 name 必须与麦当劳菜单真实品名一致（本项目拿工程技术实测过），否则别名查不到目标。",
   "version": 1,
-  "defaultStore": "福田香梅北",
+  "defaultStore": "示例星河",
   "stores": [
     {
-      "alias": ["福田香梅北", "香梅北", "xmbei", "xmB"],
-      "name": "麦当劳深圳香梅北餐厅",
-      "city": "深圳",
-      "note": "常去门店，storeCode 1420602"
+      "alias": ["示例星河", "星河", "xinghe", "xingheDemo"],
+      "name": "示例星河餐厅",
+      "city": "示例市",
+      "note": "常去门店，storeCode DEMO-STORE-001"
     },
     {
-      "alias": ["梅林路", "梅林", "zuolin"],
-      "name": "麦当劳深圳梅林路餐厅",
-      "city": "深圳",
+      "alias": ["云杉路", "云杉", "yuns"],
+      "name": "示例云杉餐厅",
+      "city": "示例市",
       "note": "备选门店"
     },
     {
-      "alias": ["景田", "jingtian"],
-      "name": "麦当劳深圳景田餐厅",
-      "city": "深圳",
+      "alias": ["晨曦", "chenxi"],
+      "name": "示例晨曦餐厅",
+      "city": "示例市",
       "note": "备选门店"
     }
   ],

@@ -105,6 +105,7 @@ MCD_MCP_URL=https://mcp.mcd.cn
 MCD_MCP_ALLOW_INSECURE_LOOPBACK=false
 # 实际支付域名白名单，逗号分隔；不填使用代码内置麦当劳域名白名单
 # MCD_PAYMENT_HOSTS=pay.mcd.cn,mcd.cn
+# 默认按精确主机匹配；只有显式写 *.example.com 才允许其子域名。
 
 # ── 持久化与入口防护 ──
 ORDER_STATE_DB=/app/.cache/order-state.sqlite  # Docker；systemd 用 /opt/mcd-txt-order/.cache/order-state.sqlite
@@ -116,6 +117,8 @@ HTTP_RATE_LIMIT_MAX=60
 ```
 
 `ORDER_STATE_DB` 必须位于持久卷。Docker Compose 已将 `/app/.cache` 挂到 `order-state` 卷；多实例跨主机时必须改为所有实例可见的共享持久存储。订单状态只保存购物车指纹、状态、金额和订单号，不保存 Token、支付链接或原始请求体。
+
+当前 Compose 保留多实例 claim 审计能力，但**不能把 `--scale mcd-txt-order=2` 直接用于用户流量**：会话草稿、确认 ticket 和无客服权限时的待补发结果仍保存在单进程内存，预览落在实例 A、确认落在实例 B 会丢失状态。生产部署先保持单应用实例；如果要做隔离的幂等演练，可在本机临时用 `--scale=2`，只验共享 SQLite claim，不把它当作用户流量验收。真正多实例上线前必须补齐共享会话/ticket 存储或可靠的用户级亲和路由，并完成目标机验收。
 
 改完用体检命令确认一遍：
 
@@ -203,7 +206,7 @@ curl 'https://你的域名/wechat?signature=xxx&timestamp=1&nonce=1&echostr=hell
 - [ ] `npm run ip` 的出口 IP 已加入白名单
 - [ ] `curl https://域名/healthz` 返回 `ok: true`
 - [ ] `healthz` 里 `exposeMock` 为 `false`（对外服务时必须是 false）
-- [ ] 已用**接口测试号**完整走过一遍：发「巨无霸 香梅北」→ 收到预览 → 回复「确认」
+- [ ] 已用**接口测试号**完整走过一遍：发「巨无霸 星河」→ 收到预览 → 回复「确认」
 - [ ] 真实下单只在本人可控的情况下验证过一次（会产生真实订单与付款）
 - [ ] `.env` 权限 600 且不在 git 里（`npm run check:release` 会查）
 - [ ] 日志可查：`docker compose logs -f` 或 `journalctl -u mcd-txt-order -f`

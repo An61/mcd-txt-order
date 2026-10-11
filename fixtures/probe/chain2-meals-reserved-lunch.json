@@ -3,7 +3,7 @@
   "code": 200,
   "message": "请求成功",
   "datetime": "2026-10-10 10:12:26",
-  "traceId": "b1a3efde0409806f0f0c337ced52a20f",
+  "traceId": "demo-trace",
   "data": {
     "categories": [
       {

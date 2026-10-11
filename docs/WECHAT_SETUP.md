@@ -86,7 +86,7 @@ https://mp.weixin.qq.com/debug/cgi-bin/sandbox?t=sandbox/login
 扫测试号页面的二维码关注它，然后在微信里发：
 
 ```
-巨无霸 香梅北
+巨无霸 星河
 ```
 
 预期收到一张预览卡片（门店、明细、优惠、应付金额），回复「确认」才会真正下单。

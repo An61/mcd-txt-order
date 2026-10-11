@@ -104,7 +104,7 @@ mcd-txt-order/
 **决策**：`query-nearby-stores` 的 `searchType=1` 就是官方"收藏餐厅"。
 
 - 优点：官方原生、跟随账号、不会因为我们在 `favorites.json` 里写死旧店名而失效
-- 兜底：本地 `config/favorites.json` 保留**别名映射**（`香梅北 → 完整店名`），用于做关键词检索与消歧
+- 兜底：本地 `config/favorites.json` 保留**别名映射**（`星河 → 完整店名`），用于做关键词检索与消歧
 - 即：**別名在本地，名单在云端**
 
 ### D3. 二次确认为强制流程

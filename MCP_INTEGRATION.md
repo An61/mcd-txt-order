@@ -68,7 +68,7 @@
 一句话下单背后的完整链路（只读部分已端到端实测跑通）：
 
 ```
-用户指令「巨无霸 香梅北」
+用户指令「巨无霸 星河」
         │
         ▼
   ① 意图识别 ────► order / confirm / cancel / query …（七类，本地完成，零 MCP 调用）
@@ -114,7 +114,7 @@
 
 这几条是本项目最值得被复用的部分，全部出自对真实 API 的调用：
 
-1. **收藏餐厅不能带关键词**。`query-nearby-stores(searchType=1)` 只返回收藏列表（本账号为空，返回 `code:600050`），且此时**传 `keyword` 会被忽略**。所以「预置喜爱餐厅」必须做成「**别名在本地，名单在云端**」：本地只存 `香梅北 → 麦当劳深圳香梅北餐厅` 的映射，实际检索仍走官方能力 + 关键词回退。
+1. **收藏餐厅不能带关键词**。`query-nearby-stores(searchType=1)` 只返回收藏列表（本账号为空，返回 `code:600050`），且此时**传 `keyword` 会被忽略**。所以「预置喜爱餐厅」必须做成「**别名在本地，名单在云端**」：本地只存 `星河 → 示例星河餐厅` 的映射，实际检索仍走官方能力 + 关键词回退。
 2. **菜单是「分类 + 字典」两份数据**。`categories[]` 里只有裸 `code`（**没有名称**），名称与价格在另一个 `data.meals` 字典里。只遍历分类会拿到一堆无名商品，必须做一次 join。
 3. **金额有两套单位**。`query-meals` 的 `currentPrice` 是「元」的**字符串**（`"26.5"`），`calculate-price` 的 `price / subtotal / discount` 是「分」的**整数**（`2650`）。混用会产生 100 倍误差。本项目在领域模型层强制"一律用分"，并写了显式换算函数。
 4. **营养数据是 Markdown**。`list-nutrition-foods` 返回的 `data` 是一整段 Markdown 文本（160 条，`productName, energyKj, energyKcal, protein, fat, carbohydrate, sodium, calcium`），必须自写解析器（见 `src/mcp/nutrition.ts`）。

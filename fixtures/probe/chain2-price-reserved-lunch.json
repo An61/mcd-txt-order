@@ -3,7 +3,7 @@
   "code": 200,
   "message": "请求成功",
   "datetime": "2026-10-10 10:12:26",
-  "traceId": "fd978ddc862ed8c9d2534580b1b51888",
+  "traceId": "demo-trace",
   "data": {
     "productOriginalPrice": 2650,
     "productPrice": 2650,

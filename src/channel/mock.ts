@@ -99,7 +99,7 @@ export function renderMockPage(initialMode: string): string {
   <div class="chips" id="chips"></div>
 
   <div class="bar">
-    <input id="input" placeholder="试试：巨无霸不要酸黄瓜 香梅北" autocomplete="off">
+    <input id="input" maxlength="2000" placeholder="试试：巨无霸不要酸黄瓜 星河" autocomplete="off">
     <button class="send" id="send">发送</button>
   </div>
 
@@ -115,7 +115,7 @@ export function renderMockPage(initialMode: string): string {
   var sendBtn = document.getElementById('send');
   var userId = 'web-' + Math.random().toString(36).slice(2, 10);
 
-  var PRESETS = ['巨无霸 香梅北', '两个巨无霸一杯可乐 香梅北', '巨无霸不要酸黄瓜 香梅北', '确认', '算了', '帮助'];
+  var PRESETS = ['巨无霸 星河', '两个巨无霸一杯可乐 星河', '巨无霸不要酸黄瓜 星河', '确认', '算了', '帮助'];
   var chips = document.getElementById('chips');
   PRESETS.forEach(function (text) {
     var b = document.createElement('button');
@@ -174,8 +174,8 @@ export function renderMockPage(initialMode: string): string {
         a.appendChild(link);
         chat.lastChild.appendChild(a);
       }
-    } catch (e) {
-      addRow('you', '请求失败：' + e);
+    } catch {
+      addRow('you', '请求失败，请稍后重试。');
     } finally {
       setBusy(false);
       input.focus();
@@ -184,7 +184,7 @@ export function renderMockPage(initialMode: string): string {
 
   sendBtn.onclick = send;
   input.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
-  addRow('you', '说一句想吃的就行，例如「巨无霸 香梅北」。\\n不确定先点上面任意一条试试。');
+  addRow('you', '说一句想吃的就行，例如「巨无霸 星河」。\\n不确定先点上面任意一条试试。');
   input.focus();
 </script>
 </body>

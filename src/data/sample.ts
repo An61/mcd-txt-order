@@ -2,8 +2,8 @@
  * 内置示例数据 —— **仅供离线演示**（T9）。
  *
  * ⚠️ 重要说明：
- * 1. 本文件数据是从麦当劳 MCP **真实探针快照**生成的（门店、菜单、价格均来自真实响应），
- *    但它是某一时刻的**快照**，已经可能过时，**不代表当前营业状态与实时价格**。
+ * 1. 菜单和价格来自本地探针快照；门店名称、编码、地址和距离是合成示例，
+ *    不代表任何真实门店或实时营业状态。
  * 2. 它不是官方发布的数据源。真实使用时一律以 `query-meals` 与 `query-nearby-stores`
  *    的实时返回为准，本文件仅服务于「没有 Token 也能跑通演示」这一个目的。
  * 3. **不含任何凭据**（无 Token、无配送地址、无账号信息），可安全随仓库分发。
@@ -36,11 +36,11 @@ export interface SampleStoreRow {
 }
 
 const SAMPLE_STORE_ROWS: readonly SampleStoreRow[] = [
-  { code: '1420602', name: '麦当劳深圳香梅北餐厅', address: '香梅路天然居商业中心一层L1-5/6-1号商铺', distance: 374, city: '深圳', open: true, openTime: '06:45', closeTime: '23:59' },
-  { code: '1420402', name: '麦当劳深圳梅林路餐厅', address: '北环大道与梅林路交汇处佐阾虹湾购物中心一楼L1018', distance: 982, city: '深圳', open: true, openTime: '00:00', closeTime: '23:59' },
-  { code: '1420062', name: '麦当劳深圳景田餐厅', address: '莲花路金色家园首层F#', distance: 1237, city: '深圳', open: true, openTime: '00:00', closeTime: '23:59' },
-  { code: '1421003', name: '麦当劳深圳梅丽路(APark)餐厅', address: '梅林街道下梅社区梅丽路9号 A PARK 深圳数字艺术公园 G1-08 & L1-09商铺', distance: 1446, city: '深圳', open: true, openTime: '00:00', closeTime: '23:59' },
-  { code: '1421179', name: '麦当劳深圳梅林安荟邻餐厅', address: '梅林街道梅林路142号梅林一村1栋梅林安荟邻1008号', distance: 1593, city: '深圳', open: true, openTime: '07:00', closeTime: '23:00' },
+  { code: 'DEMO-STORE-001', name: '示例星河餐厅', address: '示例星河大道 1 号', distance: 120, city: '示例市', open: true, openTime: '06:00', closeTime: '23:00' },
+  { code: 'DEMO-STORE-002', name: '示例云杉餐厅', address: '示例云杉路 2 号', distance: 480, city: '示例市', open: true, openTime: '06:30', closeTime: '23:30' },
+  { code: 'DEMO-STORE-003', name: '示例晨曦餐厅', address: '示例晨曦街 3 号', distance: 860, city: '示例市', open: true, openTime: '07:00', closeTime: '22:30' },
+  { code: 'DEMO-STORE-004', name: '示例湖畔餐厅', address: '示例湖畔路 4 号', distance: 1250, city: '示例市', open: true, openTime: '07:30', closeTime: '22:00' },
+  { code: 'DEMO-STORE-005', name: '示例松风餐厅', address: '示例松风路 5 号', distance: 1600, city: '示例市', open: true, openTime: '08:00', closeTime: '21:30' },
 ];
 
 export const SAMPLE_STORES: readonly Store[] = SAMPLE_STORE_ROWS.map((row) => ({
@@ -55,8 +55,8 @@ export const SAMPLE_STORES: readonly Store[] = SAMPLE_STORE_ROWS.map((row) => ({
   supportsReservation: true,
 }));
 
-/** 演示默认门店：与 config/favorites.example.json 里的「福田香梅北」对应 */
-export const SAMPLE_DEFAULT_STORE_CODE = '1420602';
+/** 演示默认门店：与 config/favorites.example.json 里的「示例星河」对应 */
+export const SAMPLE_DEFAULT_STORE_CODE = 'DEMO-STORE-001';
 
 // ─────────────────────────────────────────────────────────────
 // 菜单

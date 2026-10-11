@@ -3,5 +3,5 @@
   "code": 600050,
   "message": "收藏餐厅列表为空，请您提供城市+关键词进行搜索",
   "datetime": "2026-10-10 10:11:17",
-  "traceId": "78965226a4433a24fddb5f438f2adc0f"
+  "traceId": "demo-trace"
 }

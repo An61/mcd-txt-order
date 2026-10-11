@@ -8,7 +8,6 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    container_name: mcd-txt-order
     restart: unless-stopped
     # 不映射宿主端口：只加入内部网络，外部访问必须经过 caddy
     expose:
@@ -27,7 +26,9 @@ services:
       # 注意：本地可能只有 favorites.example.json（真实 favorites.json 通常被 .gitignore 排除），
       # 此时容器会回退到示例配置并打出警告 —— 属正常行为。
       - ../config:/app/config:ro
-      # 订单 claim 状态必须跨容器重启保留；多实例部署需改为共享持久存储。
+      # 订单 claim 状态必须跨容器重启保留；多实例 claim 审计可共享该卷。
+      # 当前会话草稿和确认 ticket 仍在进程内，生产流量不得直接透明扩成多实例；
+      # 跨主机多实例还必须改为共享会话/ticket 存储和具备锁语义的持久存储。
       - order-state:/app/.cache
     networks:
       - mcd-net

@@ -66,7 +66,7 @@
 | T6 | `src/mcp/nutrition.ts` Markdown 营养解析器 | P1 | T4 | ✅ 完成。160 条全解析、0 跳过；**右侧倒推**切分以处理含逗号的品名（`蒜了吧黄油风味薄皮脆汁鸡-琵琶腿`） |
 | T7 | `src/domain/matcher.ts` 四级降级匹配 | P0 | T4 | ✅ 完成。另加 `resolveItemText` 做**菜单感知**的品名/特制切分（见下方说明） |
 | T8 | `src/domain/favorites.ts` 收藏与别名管理 | P0 | T7 | ✅ 完成。回退时回报**真实读到的文件路径**（原先会误报不存在的 favorites.json）。`config/favorites.example.json` 已改为对齐菜单真实品名 |
-| T9 | `src/data/sample.ts` 内置示例数据 | P0 | T4 | ✅ 完成。**由 `scripts/gen-sample.ts` 从真实探针快照生成**（门店 8 家 / 菜单 115 条 / 餐品详情 1 份），非手写假数据 |
+| T9 | `src/data/sample.ts` 内置示例数据 | P0 | T4 | ✅ 完成。**由 `scripts/gen-sample.ts` 基于本地菜单快照和合成门店生成**（合成门店 5 家 / 菜单 115 条 / 餐品详情 1 份），非手写假数据 |
 | T36 | `src/domain/qty.ts` 数量与多品解析 | **P0** | T7 | ✅ 完成。**修掉量词判定 bug**（量词已被正则吞进 match[0]，原先去看 match 之后的文本恒为 false，导致「一杯」「两个」判不出来） |
 
 ---
@@ -145,8 +145,8 @@
 | ID | 任务 | 优先级 | 依赖 | 验收标准 |
 |---|---|---|---|---|
 | ~~T29~~ ✅ | 全仓库脱敏扫描 | **P0** | T24~T27 | 确认无任何 Token / AppSecret / 手机号 / 收货地址 | ✅ `Bearer`/`*_TOKEN=`/手机号四类模式全仓扫描无命中；`.cache/` 与 `.env` 均已 gitignore |
-| T30 | 建 GitHub 公开仓库 `An61/mcd-txt-order` 并推送 | P0 | T29 | Public 可访问；创建时间在 2025-12-25 ~ 2026-10-25 区间内（由 GitHub 保证） | 🟨 GitHub API 已确认仓库 `An61/mcd-txt-order` 当前为 Public；创建时间窗口仍需在仓库页面核对 |
-| T31 🛑 | 生成报名 Issue 文案并提交 | ~~P0~~ **冻结** | T30 | 格式符合模板，`≤1000 字`，**无图片**；提交后等待官方机器人回复成功通知 | ⛔ **用户禁令冻结（2026-10-11 09:21）**：禁止代报名，直到用户另行通知。文案侧已就绪——`docs/REGISTRATION_ISSUE.md`（824 字、无图）已按官方第二次回执的标准模板整改，`scripts/check-registration.ts` 14 项门禁通过。**提交动作须由用户本人完成，或经其明确许可。** |
+| ~~T30~~ ✅ | 建 GitHub 公开仓库 `An61/mcd-txt-order` 并推送 | P0 | T29 | Public 可访问；创建时间在 2025-12-25 ~ 2026-10-25 区间内（由 GitHub 保证） | ✅ GitHub 页面/API 已确认 `private: false`；`createdAt=2026-10-10T14:02:23Z`（北京时间 2026-10-10 22:02:23），处于官方创建时间窗口内。当前本地最新 S9 修复仍待用户推送 |
+| T31 🛑 | 生成报名 Issue 文案并提交 | ~~P0~~ **冻结** | T30 | 格式符合模板，`≤1000 字`，**无图片**；提交后等待官方机器人回复成功通知 | ⛔ **用户禁令冻结（2026-10-11 09:21）**：禁止代报名，直到用户另行通知。文案侧已就绪——`docs/REGISTRATION_ISSUE.md`（826 字、无图）已按官方第二次回执的标准模板整改，`scripts/check-registration.ts` 14 项门禁通过。**提交动作须由用户本人完成，或经其明确许可。** |
 | T32 🛑 | 验证报名成功回执 | ~~P0~~ **冻结** | T31 | Issue 下出现官方成功通知；若失败按回复原因修正后重提 | ⛔ 随 T31 一并冻结。Issue #361 现有两条官方回执：① 10-10「项目无法访问」（已随仓库转 Public 消除）；② 10-11「简介标题与正文之间不要使用换行符」（文案已整改）。**在禁令解除前不主动重提、不催办、不追加评论。** |
 
 ---
@@ -157,7 +157,7 @@
 |---|---|---|---|---|
 | ~~T33~~ ✅ | README 首屏演示物料 | P1 | T20 | 30 秒内看懂核心能力 | ✅ `docs/demo.svg` 微信会话风格演示图，数据取自 `npm run demo` **真实输出**（非手写）；README 首屏嵌入，另折叠保留纯文本版。<br>**刻意用 SVG 而非 GIF**：零外部资源、断网可用、不占仓库体积、GitHub 双主题都能看，且不存在动图里误截真实 Token 的风险（T35） |
 | ~~T34~~ ✅ | 撰写技术要点文章 | P2 | T3 | 突出实测发现的隐藏能力与失败陷阱 | ✅ `docs/TECHNICAL_NOTES.md`《把麦当劳 MCP 接进微信：只有真跑一遍才会踩到的坑》——五个文档未记载的坑、`keyword` 不过滤、`reservationDate` 是会话上下文、金额两套单位、菜单需 join；并**诚实标注「特制无法从服务端验证」这一未解项**。README 已置入「延伸阅读」表 |
-| ~~T35~~ ✅ | 推送前的礼节性检查 | P2 | T33 | 截图/动图中不得出现真实 Token 与支付链接 | ✅ 做成**可重复的门禁** `scripts/check-release.ts`（18 项，已并入 `npm run check`）：凭据赋值 / Bearer / 手机号 / 支付链接 / 32 位密串 / 误入库的 `.env`/`.cache`/`favorites.json`；二进制图片读不出内容则**列出要求人工确认**，不假装能扫。**负向验证已做**：植入假 Token+手机号+支付链接后 3 条全部拦下并退出码 1 |
+| ~~T35~~ ✅ | 推送前的礼节性检查 | P2 | T33 | 截图/动图中不得出现真实 Token 与支付链接 | ✅ 做成**可重复的门禁** `scripts/check-release.ts`（24 项，已并入 `npm run check`）：凭据赋值 / Bearer / 手机号 / 支付链接 / 32 位密串 / 误入库的 `.env`/`.cache`/`favorites.json`；二进制图片读不出内容则**列出要求人工确认**，不假装能扫。**负向验证已做**：植入假 Token+手机号+支付链接后 3 条全部拦下并退出码 1 |
 
 ---
 
@@ -219,11 +219,11 @@
 
 | ID | 状态 | 优先级 | 任务与解决方案 | 依赖 | 主要路径 | 验收标准 |
 |---|---|---:|---|---|---|---|
-| **S9-A1** | ✅ | P0 | **持久化订单幂等与状态。** 为购物车指纹建立持久化、原子 claim → pending → succeeded/failed/unknown 状态；应用层作为第二道防线。 | T10/T11/T17/T37 | src/safety/guard.ts、src/safety/orderAttemptStore.ts、src/mcp/gateway.ts | `check:s9:a1` 与共享 SQLite 卷的双容器 claim 已验证互斥、重启回放和 unknown 终态；官方 [Create Order schema](https://github.com/M-China/mcd-mcp-server/blob/main/README_EN.md) 当前只列业务字段，未公开 provider 原生幂等键，因此继续保持应用层第二道防线。 |
-| **S9-A2** | ✅ | P1 | **支付链接校验与前端安全。** 对 MCP 返回的支付 URL 做协议、域名、长度和控制字符校验；网页模拟器禁止字符串 `innerHTML` 拼接，使用 DOM 属性写入；拒绝 `javascript:`、`data:`、空 host 和非允许支付域名。 | T19/T20 | `src/mcp/normalize.ts`、`src/channel/mock.ts`、`src/channel/core.ts` | 恶意 URL、HTML、引号、换行和控制字符只作为文本显示；允许的 HTTPS URL 可点击；不允许的 URL 不进入回复、不进入 HTML；`EXPOSE_MOCK=true` 时仍通过安全测试。 |
+| **S9-A1** | ✅ | P0 | **持久化订单幂等与状态。** 为购物车指纹建立持久化、原子 claim → pending → succeeded/failed/unknown 状态；应用层作为第二道防线。 | T10/T11/T17/T37 | src/safety/guard.ts、src/safety/orderAttemptStore.ts、src/mcp/gateway.ts | `check:s9:a1` 与共享 SQLite 卷的双容器 claim 已验证互斥、重启回放和 unknown 终态；`create-order` 的连接异常、HTTP 5xx、响应解析失败均保守进入 `unknown`，不得自动重试；官方 [Create Order schema](https://github.com/M-China/mcd-mcp-server/blob/main/README_EN.md) 当前只列业务字段，未公开 provider 原生幂等键，因此继续保持应用层第二道防线。 |
+| **S9-A2** | ✅ | P1 | **支付链接校验与前端安全。** 对 MCP 返回的支付 URL 做协议、域名、长度和控制字符校验；网页模拟器禁止字符串 `innerHTML` 拼接，使用 DOM 属性写入；拒绝 `javascript:`、`data:`、空 host 和非允许支付域名。 | T19/T20 | `src/mcp/normalize.ts`、`src/channel/mock.ts`、`src/channel/core.ts` | 恶意 URL、HTML、引号、换行和控制字符只作为文本显示；输入框限制 2000 字符；网络异常只显示固定文案；允许的 HTTPS URL 可点击；默认支付域名按精确主机匹配，只有显式 `*.host` 才允许子域名；不允许的 URL 不进入回复、不进入 HTML；`EXPOSE_MOCK=true` 时仍通过安全测试。 |
 | **S9-A3** | ✅ | P1 | **HTTP 入口限界与限流。** Node 层增加请求体字节上限、超时、应用限流，反代保持相同上限。 | T21/T22/T39 | src/channel/server.ts、deploy/Caddyfile、deploy/nginx.conf | Node body cap、5 秒超时、应用限流和 Nginx 限流已有脚本证据；Caddyfile 已用官方镜像 `caddy validate` 通过；**Nginx 已于 2026-10-11 用官方 `nginx:1.27-alpine` 执行 `nginx -t` 通过（退出码 0）**，原「需目标机二进制验收」已解除。 |
-| **S9-A4** | 🟨 | P1 | **错误脱敏与安全日志。** 客户端、微信回复和会话文案只返回固定人话；原始异常、远端响应、URL、Token 和完整请求体不得进入用户输出。 | T2/T19/T21 | src/safety/publicError.ts、src/channel/server.ts、src/channel/core.ts、src/domain/orderFlow.ts、src/mcp/normalize.ts、src/mcp/client.ts | 生产回复已移除原始异常和远端响应；release scan 24/24 通过。完整生产日志平台扫描仍需部署后执行。 |
-| **S9-A5** | ✅ | P1 | **MCP 传输安全。** 启动时解析 `MCD_MCP_URL`；默认只允许 HTTPS，HTTP 仅允许显式 opt-in 的本机回环代理；拒绝任意公网 HTTP 地址，并在启动日志中只显示脱敏 endpoint。 | T1/T2/T14 | `src/mcp/client.ts`、`src/mcp/gateway.ts`、`.env.example` | `https://` 正常；公网 `http://` 启动即失败；仅允许的 `127.0.0.1`/`::1` 本机代理可在显式配置下运行；Token 不出现在错误、日志或 URL。 |
+| **S9-A4** | 🟨 | P1 | **错误脱敏与安全日志。** 客户端、微信回复和会话文案只返回固定人话；原始异常、远端响应、URL、Token 和完整请求体不得进入用户输出。 | T2/T19/T21 | src/safety/publicError.ts、src/channel/server.ts、src/channel/core.ts、src/domain/orderFlow.ts、src/mcp/normalize.ts、src/mcp/client.ts | 生产回复已移除原始异常和远端响应；`check:s9:boundaries` 已验证含伪造 Token/URL 及 `null`/`undefined` 异常不会进入用户文案或内部错误标签，release scan 24/24 通过。完整生产日志平台扫描仍需部署后执行。 |
+| **S9-A5** | ✅ | P1 | **MCP 传输安全。** 启动时解析 `MCD_MCP_URL`；默认只允许 HTTPS，HTTP 仅允许显式 opt-in 的本机回环代理；拒绝任意公网 HTTP 地址，并在启动日志中只显示脱敏 endpoint。 | T1/T2/T14 | `src/mcp/client.ts`、`src/mcp/gateway.ts`、`.env.example` | `https://` 正常；公网 `http://` 启动即失败；仅允许显式配置的 `127.0.0.1`/`[::1]` IP 字面量代理，`localhost` 也会拒绝；Token 不出现在错误、日志或 URL。 |
 | **S9-A6** | ✅ | P1 | **类型检查、CI 与回归门禁。** 安装并锁定 TypeScript 类型检查依赖，增加 Node 22 的 CI；保留现有自检，同时执行 `tsc --noEmit`、语法检查、release scan 和部署配置校验。 | T38/T39/T40 | `package.json`、`package-lock.json` 或等价锁文件、`.github/workflows/`、`tsconfig.json` | 干净 checkout 可重复运行；类型检查、`npm run check`、`npm run check:release` 全部通过；CI 不读取真实 `.env`，不调用真实写接口。 |
 | **S9-A7** | 🟨 | P1 | **部署与故障演练。** 对 Dockerfile、Compose、Caddy、Nginx、systemd 做配置检查和最小启动验证。 | S9-A1/A3/A5/A6 | deploy/、docs/WECHAT_PRODUCTION.md | Compose 语法、镜像构建、Node 容器启动、`/healthz`、非 root UID 和容器重启回归已通过；Nginx `nginx -t` 与 systemd `systemd-analyze verify` 已于 2026-10-11 用官方镜像/官方工具通过；**带真实证书与域名的目标机启动、滚动替换和回滚仍需隔离部署环境**。 |
 | **S9-A8** | 🟨 | P2 | **文档与历史卫生。** 修正 parseOrderResult 过时注释，保留 secret scan，复核外部报名回执。 | T29/T30/T31/T32 | src/mcp/normalize.ts、scripts/check-release.ts、TASKS.md、GitHub Issue #361 | 注释已修正；当前树无真实凭据；release scan 24/24 通过。Issue #361 已回读并确认官方拒绝；仓库已 Public。**「复核回执」仅限只读读取评论，不提交、不催办**（用户禁令 2026-10-11 冻结提交动作）。 |
@@ -231,7 +231,7 @@
 ### 已实施边界与剩余验收
 
 - **已实施**：真实模式使用 SQLite 持久化订单尝试状态；同一持久文件支持跨进程原子 claim，超时/连接中断进入 `unknown`；支付链接、MCP URL、HTTP body、请求超时、应用限流和错误脱敏均有代码与本地脚本证据。
-- **已验证**：`npm run typecheck`、`npm run check:deploy`（14/14）、`npm run check:s9:a1`、`npm run check:s9:boundaries`、无 Token 的 `npm run check`（M1 60/60、M2 83/83、M3 27/27 离线、M4 74/74、M8 49/49、release 24/24）。
+- **已验证**：`npm run typecheck`、`npm run check:deploy`（14/14）、`npm run check:s9:a1`、`npm run check:s9:boundaries`；当前无 Token 离线 `npm run check` 为 **331 项通过 / 0 失败 / 0 跳过**（M1 60、M2 83、M3 27、M4 74、M8 49、报名文案 14、release 24）。此前带 Token 的只读链路另有 340 项通过记录，M3 为 36 项（含真实只读链路）。
 - **独立复审**：定向复审通过，确认 `parseOrderResult` 异常进入 `unknown` 分支、异常下单文案不再错误声称“没有扣款”；未发现新的 P0/P1。
 - **仍需用户环境**：Caddy/Nginx/systemd **在目标机上带真实证书与域名的启动**、两实例共享持久卷的滚动替换、真实微信账号和真实 `create-order` 验收；这些未获授权前不解除 M8 生产阻塞。（注：Nginx 与 systemd 的配置级验证已于 2026-10-11 在本机用官方镜像取得，见下条，剩余的是带真实证书/域名的运行时验收。）
 - **Nginx 语法证据（2026-10-11 补齐）**：本机 Docker Desktop 可用，拉取 `nginx:1.27-alpine`（digest `sha256:65645c7bb6a0…`），容器内 `apk add openssl` 生成占位证书后执行 `nginx -t`：
@@ -242,6 +242,7 @@
   退出码 0。**过程中发现一条部署约束必须写进文档**：`deploy/nginx.conf` 是 **conf.d 片段**，只能挂到 `/etc/nginx/conf.d/*.conf` 由主配置的 `http {}` 包含；若误当主配置文件（`nginx -c` 指向它）会报 `upstream directive is not allowed here`。此前「无法取得 nginx -t 证据」的判断就此作废。
 - **systemd 单元证据（2026-10-11 补齐）**：`debian:bookworm-slim` 容器安装 systemd 252.39 后执行 `systemd-analyze verify /etc/systemd/system/mcd-txt-order.service`，**无语法错误**；仅报 `Command /usr/bin/node is not executable`（容器内未装 Node，属运行时依赖缺失，非单元缺陷）。另两条「marked executable / world-writable」是 Windows 宿主机文件权限经 Docker 挂载的假象，目标机 `chmod 644` 后不会出现。
 - **Docker 现场证据**：本机 `docker compose config --quiet` 通过；`mcd-txt-order` 镜像构建、非 root 启动、`/healthz=200`、持久卷挂载和一次容器重启后的健康检查均通过；验证容器、网络和卷已清理。
+- **隔离双实例故障演练（2026-10-11，本机 Docker Desktop）**：移除应用固定 `container_name` 后，用 `docker compose up -d --scale mcd-txt-order=2` 启动两个应用实例和 Caddy 内部 TLS；两个实例均返回 `/healthz=200`，调试根路径为 404，Caddy 进程正常监听。共享卷上的两次 claim 返回 `true/false`，重启两个实例后再次 claim 仍为 `false`；切换不可变镜像标签并回滚后两个实例均恢复 healthy。该证据**只覆盖订单 claim 的共享状态、重启和镜像回滚**，不证明用户会话/确认 ticket 可跨实例，也不等同于目标机真实证书/域名验收；生产流量仍保持单实例。
 - **容器级幂等证据**：两个独立 Node 容器共享同一临时 SQLite 卷，对同一用户和购物车指纹分别 claim，结果为 `true/false`；测试卷和容器已清理。
 - **Provider schema 证据**：已查阅官方 Create Order 文档；公开入参列出 `storeCode`、`beCode`、`addressId`、`takeWayCode`、`beType`、`reservationDate`、`gmServiceCode`、`items`，未列出幂等键或请求去重契约，因此不能臆造字段接入。
 - **反代配置证据**：官方 `caddy:2-alpine` 对 `deploy/Caddyfile` 执行 `caddy validate` 通过；Nginx `nginx -t` 已在官方 `nginx:1.27-alpine` 容器内通过。仍需目标机使用真实证书与域名完成启动、切换和回滚验收。
@@ -335,7 +336,7 @@
 | 仓库公开可访问 | ✅ `private: false` |
 | 真实使用麦当劳 MCP 能力 | ✅ 实测 35 个工具，检索/菜单/详情/算价均为真实调用 |
 | README.md / CONTEST_DECLARATION.md / MCP_INTEGRATION.md / mcp-config.example.json / workbuddy.md | ✅ 五项齐备且均在 git 追踪中 |
-| 报名 Issue 含项目名称、项目地址、项目简介 | ✅ 文案就绪（824 字、无图） |
+| 报名 Issue 含项目名称、项目地址、项目简介 | ✅ 文案就绪（826 字、无图） |
 | 内容合规、原创 | ✅ 礼节门禁 24 项通过 |
 
 **真正的获奖瓶颈是 Star 数，不是功能完整度。** 规则原文：「Star数为0的项目不进入排行榜」。
@@ -347,7 +348,7 @@
 
 ### 当前证据记录
 
-- 本次审计（有 Token）：`npm run check` 为 **340 项通过 / 0 失败 / 1 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + **报名文案 14** + 礼节 24），另有 `npm run typecheck`、`check:s9:a1`、`check:s9:boundaries`、`check:deploy`（14/14）通过。**M3 的 1 项跳过是麦当劳早餐时段菜单无巨无霸所致，属外部服务状态**（详见下条）。
+- 此前带 Token 的只读链路实测：`npm run check` 为 **340 项通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + **报名文案 14** + 礼节 24），另有 `npm run typecheck`、`check:s9:a1`、`check:s9:boundaries`、`check:deploy`（14/14）通过。M3 已改为在菜单时段变化时回退到当店在售品，该次运行没有跳过项；当前无 Token 离线复核不包含这 9 项真实只读断言。
 - **M3 时段依赖已修复（2026-10-11）**：此前 M3 硬编码「巨无霸」，早餐/夜宵时段菜单无此品时，3 项断言因 `if (target)` 被静默跳过（36 → 33 项）且端到端报红；更严重的是 `check-m3.ts` 结尾 `if (failed > 0) process.exitCode = 1` 会让 `npm run check` 的 `&&` 链在 M3 处断掉，**M4/M8/礼节共 147 项根本不执行**。现已改为：优先巨无霸、缺货则回退当店在售品（按名字长度升序取前 6 个带价候选，逐个算价取首个成功者），并引入 `skip()` 区分「外部服务状态」与「代码结构性失败」——只有后者才置退出码 1。同次提交还让网络/凭据/超时类异常走 skip 而非 failed。
 - CodeGraph 历史索引记录保留；本轮不把旧索引统计当作生产 Gate 证据。
 - Node 原生检查与 `tsc --noEmit` 均通过。
@@ -362,10 +363,11 @@
 | 项 | 结果 |
 |---|---|
 | `npm run doctor` | ✅ 连上 `https://mcp.mcd.cn/`，服务端提供 35 个工具；Token 已配置 |
-| `npm run check` | ✅ **340 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 报名 14 + 礼节 24）。上次那 1 项跳过是时段缺货，本次为 0 |
+| `npm run check`（有 Token 历史快照） | ✅ **340 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 报名 14 + 礼节 24）。上次那 1 项跳过是时段缺货，该次运行已恢复为 0 |
+| `npm run check`（当前无 Token 离线复核） | ✅ **331 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 27 + M4 74 + M8 49 + 报名 14 + 礼节 24） |
 | `npm run typecheck` | ✅ 通过 |
-| CI | ✅ 绿；本地 HEAD `1dcefc3` = `origin/master` |
-| 真实链路（预览后取消） | ✅ 门店→菜单→匹配→详情→算价→预览全通，实测 `麦当劳深圳香梅北餐厅 / 猪柳蛋麦满分 ×1 ¥18.00 / 堂食` |
+| CI | ✅ 绿；本地 HEAD `e58d5da` 比 `origin/master` 超前 1 个提交，当前另有 15 个未提交 S9 修复/文档文件 |
+| 真实链路（预览后取消） | ✅ 门店→菜单→匹配→详情→算价→预览全通，实测门店信息已脱敏 / 猪柳蛋麦满分 ×1 ¥18.00 / 堂食 |
 
 **主链路 6 步：前 5 步真实或自检覆盖 ✅，第 6 步 `create-order` 🟡 未验证（T17，会真花钱，需本人授权）。**
 
@@ -373,4 +375,4 @@
 
 1. **微信凭据仍全空**：`doctor` 报 `WECHAT_TOKEN`、`AppID/Secret` 均未设置，监听 `127.0.0.1:8787`。代码侧（M4 74 + M8 49 项）全绿，但**无凭据即无真机证据**。→ 下一步走接口测试号，不花钱。
 2. **菜单分时段会让人误判为 bug**：10:30 前 `--item 巨无霸` 返回「没在…菜单里找到巨无霸」，实为早餐时段菜单 92 项无此品。演示需避开早餐时段。
-3. **T17 执行前必须先排除的缺陷**：真实收银台域名若不在 `isSafePaymentUrl` 白名单（`mcd.cn`/`mcd.com.cn`/`mcdonalds.com.cn`），`payUrl` 会被**静默置空**而订单已建。
+3. **T17 执行前必须确认支付域名**：真实收银台域名若不在 `isSafePaymentUrl` 白名单（默认含 `pay.mcd.cn`、`mcd.cn`、`mcd.com.cn`、`mcdonalds.com.cn`，或 `MCD_PAYMENT_HOSTS` 配置值），下单响应会被判为解析失败并进入 `unknown`，不会向用户伪报成功；执行真实订单前仍需从官方响应确认实际域名并配置白名单。

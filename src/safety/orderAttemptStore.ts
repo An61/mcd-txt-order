@@ -23,7 +23,7 @@ type SqliteModule = { readonly DatabaseSync: new (path: string) => DatabaseSync 
  * 一、把模块原生的 stack trace 换成人话——与 publicError 同源的原则，
  *    用户不该面对 `ERR_UNKNOWN_BUILTIN_MODULE` 去猜该怎么办；
  * 二、让「不支持 sqlite 的环境」只在真正用到幂等存储时才失败，
- *    其余 340 项离线自检（M1/M2/M3/M4/M8/报名/礼节）仍可完整运行。
+ *    其余离线自检（M1/M2/M3/M4/M8/报名/礼节）仍可完整运行。
  */
 function loadSqlite(): SqliteModule {
   try {

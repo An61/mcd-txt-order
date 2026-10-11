@@ -2,7 +2,7 @@
  * 收藏与别名管理（用户心愿単的配置中心）。
  *
  * 分工原则：**别名在本地，名单在云端。**
- * - 本地 `config/favorites.json` 只存「香梅北 → 深圳福田香梅北店」这类**叫法映射**；
+ * - 本地 `config/favorites.json` 只存「星河 → 示例市星河餐厅」这类**叫法映射**；
  * - 真实门店清单以官方 `query-nearby-stores` 为准，避免本地写死名单过期失效。
  *   （实测本账号收藏列表为空会返回 code 600050，因此南侧必须能随时回退到关键词检索。）
  *
@@ -241,7 +241,7 @@ function normalizeCombos(value: unknown): ComboFavorite[] {
 // ─────────────────────────────────────────────────────────────
 
 export interface StoreHint {
-  /** 命中的别名原文，如「香梅北」 */
+  /** 命中的别名原文，如「星河」 */
   readonly alias: string;
   readonly favorite: StoreFavorite;
   /** 去掉别名词后的剩余文本，交给数量/餐品解析继续处理 */
@@ -254,10 +254,10 @@ const MIN_ALIAS_LENGTH = 2;
 /**
  * 从用户输入里识别门店别名，并把这部分从文本中摘掉。
  *
- * 为什么在这里摘：用户说「巨无霸 香梅北」，若不先把「香梅北」切出去，
+ * 为什么在这里摘：用户说「巨无霸 星河」，若不先把「星河」切出去，
  * 后续会被当成餐品片段产生误导候选。
  *
- * 匹配策略：**取最长命中**。因为别名可能互相包含（「香梅北」是「福田香梅北」的子串），
+ * 匹配策略：**取最长命中**。因为别名可能互相包含（「星河」是「示例星河」的子串），
  * 长命中更能代表用户意图。
  */
 export function resolveStoreAlias(text: string, config: FavoritesConfig): StoreHint | undefined {

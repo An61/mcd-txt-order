@@ -3,7 +3,7 @@
  * **门店到底能不能按关键词检索？**
  *
  * 这直接决定 orderFlow 的默认路径：
- *   - 若 `searchType=2 + keyword` 能按名搜 ──►「巨无霸 香梅北」可以用别名直接命中门店
+ *   - 若 `searchType=2 + keyword` 能按名搜 ──► 指定关键词可以用别名直接命中门店
  *   - 若 keyword 无效 ─────────────────────► 只能先取附近门店列表，再在本地做名称/别名匹配
  *
  * 顺带记录每种组合的错误码，用于 SPEC 回填。
@@ -21,6 +21,13 @@ import {
 } from '../src/mcp/client.ts';
 
 loadDotEnv();
+
+const PROBE_CITY = process.env.PROBE_CITY?.trim() ?? '';
+const PROBE_KEYWORD = process.env.PROBE_KEYWORD?.trim() ?? '';
+if (!process.env.MCD_MCP_TOKEN || !PROBE_CITY || !PROBE_KEYWORD) {
+  console.log('跳过真实门店探针：请显式设置 MCD_MCP_TOKEN、PROBE_CITY、PROBE_KEYWORD；不会使用示例位置调用服务。');
+  process.exit(0);
+}
 
 const OUT_DIR = resolve(findProjectRoot(), '.cache', 'probe');
 mkdirSync(OUT_DIR, { recursive: true });
@@ -78,7 +85,7 @@ async function main(): Promise<void> {
   await probe(client, 'A2-fav-with-keyword', 'query-nearby-stores', {
     beType: 1,
     searchType: 1,
-    keyword: '香梅北',
+    keyword: PROBE_KEYWORD,
   });
 
   console.log('\n═══════ B. 按位置检索 (searchType=2) ═══════');
@@ -86,18 +93,18 @@ async function main(): Promise<void> {
   await probe(client, 'B2-loc-keyword', 'query-nearby-stores', {
     beType: 1,
     searchType: 2,
-    keyword: '香梅北',
+    keyword: PROBE_KEYWORD,
   });
   await probe(client, 'B3-loc-city', 'query-nearby-stores', {
     beType: 1,
     searchType: 2,
-    city: '深圳',
+    city: PROBE_CITY,
   });
   await probe(client, 'B4-loc-city-keyword', 'query-nearby-stores', {
     beType: 1,
     searchType: 2,
-    city: '深圳',
-    keyword: '香梅北',
+    city: PROBE_CITY,
+    keyword: PROBE_KEYWORD,
   });
 
   console.log('\n═══════ C. 不传 searchType 的边界 ═══════');
@@ -105,8 +112,8 @@ async function main(): Promise<void> {
   await probe(client, 'C2-keyword-only', 'query-nearby-stores', {
     beType: 1,
     searchType: 2,
-    keyword: '香梅北',
-    city: '深圳',
+    keyword: PROBE_KEYWORD,
+    city: PROBE_CITY,
     pageNo: 1,
     pageSize: 5,
   });
