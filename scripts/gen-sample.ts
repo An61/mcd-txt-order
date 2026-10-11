@@ -120,9 +120,12 @@ async function main(): Promise<void> {
  * 生成时间：${new Date().toISOString()}
  */
 
-import { hasPrice, yuanToCents, type Menu, type MenuCategory, type MenuItem, type Store } from '../domain/types.ts';
-import { parseMealDetail } from '../mcp/normalize.ts';
-import type { ParseNutritionResult } from '../mcp/nutrition.ts';
+// 注意：本脚本位于 scripts/（不是 src/scripts/），相对路径必须带 src/。
+// 曾写成 '../domain/...'，在大小写敏感的文件系统（Linux/CI）上会直接 ENOENT；
+// Windows 不区分大小写且曾能从旧位置解析，所以一直没暴露。
+import { hasPrice, yuanToCents, type Menu, type MenuCategory, type MenuItem, type Store } from '../src/domain/types.ts';
+import { parseMealDetail } from '../src/mcp/normalize.ts';
+import type { ParseNutritionResult } from '../src/mcp/nutrition.ts';
 
 // ─────────────────────────────────────────────────────────────
 // 门店
