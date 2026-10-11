@@ -382,7 +382,7 @@
 
 ## S10 搜索型点餐与外卖地址簿（2026-10-11）
 
-> **状态：⬜ READY（仅完成任务编排，尚未开始实现）**
+> **状态：🟨 IN_PROGRESS（S10-A1 输入契约与领域模型）**
 >
 > 产品决策：不要求用户预置餐品或餐厅；用户直接发送餐品名、餐厅名和取餐方式，系统实时检索并在歧义时让用户选择。外卖地址允许保存多个，并支持默认地址。MVP 采用“文本地址 → MCP 地址检索 → 数字确认 → 保存 `addressId`”方案，不引入原生地址选择页面。
 
@@ -396,16 +396,19 @@
 | **PROJECT** | mcd-txt-order |
 | **WORKSTREAM** | S10 搜索型点餐 |
 | **OBJECTIVE** | 让用户无需预置餐品或餐厅即可通过名称完成检索；让外卖用户管理多个地址并使用默认地址；所有真实下单仍经过实时菜单、实时算价和二次确认。 |
-| **STATUS** | READY |
+| **STATUS** | IN_PROGRESS |
 | **PRIORITY** | P1（体验主线）；资金安全继续按 P0 处理 |
 | **DEPENDENCIES** | T14~T19、T21~T23、T37；依赖 S9-A1/A2/A4/A6 的已验证安全基线 |
 | **OWNER** | Main（当前执行线程）；实现阶段可按下方任务卡分派，但共享 `TASKS.md` 由 Main 串行维护 |
+| **ACTIVE_BINDING** | owner=Main；branch=`master`；worktree=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；base=`f6a2ae888ee2db32989a055a02529c83f3da195e`；write-scope=`src/domain/`, `scripts/check-s10-a1.ts`, `package.json`, `SPEC.md`, `TASKS.md` |
 | **SOURCE_ANCHOR** | `TASKS.md §S10` |
 | **OWNED_PATHS / RESOURCES** | `src/domain/`、`src/channel/core.ts`、`src/mcp/`、`src/safety/`、`config/`、`fixtures/`、`scripts/`、`docs/` |
 | **FORBIDDEN_PATHS / SIDE EFFECTS** | 不调用真实 `create-order`；不发送公网微信消息；不发布生产；不轮换外部凭据；不把真实地址、Token、支付链接写入源码、夹具或日志 |
 | **ACCEPTANCE_CRITERIA** | 见 S10-A1~S10-A7；名称顺序可变化但实体必须来自检索或用户已确认结果；歧义未解决时不得下单；外卖无有效地址时不得进入算价 |
 | **VERIFICATION** | 新增离线 S10 门禁；并通过 `npm run typecheck`、`npm run check`、`npm run check:release`、`npm run check:s9:boundaries`；真实写接口和公网运行证据保持未验证 |
 | **REVIEW_REQUIRED** | 需要一次独立代码复核，重点覆盖解析歧义、用户隔离、地址默认值、候选会话和确认令牌绑定 |
+| **REPAIR_STATE** | attempt=1；score=2（P1 边界修复）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION |
+| **S10-A1_EVIDENCE** | commit=`57e5c43`；`npm run check:s10:a1` PASS；`npm run typecheck` PASS；全量 `npm run check`、`check:release`、`check:s9:boundaries` PASS；独立复核 PASS；证据上限为本地离线静态与自检，不代表真实 MCP/生产验收 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
 | **UPDATED_AT** | 2026-10-11（Asia/Shanghai） |
@@ -414,7 +417,7 @@
 
 | ID | 状态 | 优先级 | 任务与解决方案 | 依赖 | 主要路径 | 验收标准 |
 |---|---|---:|---|---|---|---|
-| **S10-A1** | ⬜ | P0 | **输入契约与领域模型。** 定义餐品查询词、餐厅查询词、取餐方式、特制项、地址引用和候选选择的统一模型；支持 `餐品 餐厅 堂食`、`餐厅 堂食 餐品` 等顺序变化。 | — | `src/domain/`、`SPEC.md` | 明确解析结果、缺失字段和歧义状态；不把任意自然语言直接当成可下单参数；既有编号输入可保留为兼容格式。 |
+| **S10-A1** | ✅ | P0 | **输入契约与领域模型。** 定义餐品查询词、餐厅查询词、取餐方式、特制项、地址引用和候选选择的统一模型；支持 `餐品 餐厅 堂食`、`餐厅 堂食 餐品` 等顺序变化。 | — | `src/domain/`、`SPEC.md` | 明确解析结果、缺失字段和歧义状态；不把任意自然语言直接当成可下单参数；既有编号输入可保留为兼容格式。 |
 | **S10-A2** | ⬜ | P0 | **外卖地址簿。** 支持添加、列出、设默认、删除地址；通过 `delivery-query-addresses` 检索候选，用户数字确认后保存服务端 `addressId`。 | S10-A1 | `src/domain/`、`src/mcp/`、`src/safety/`、`config/` | 每个用户地址隔离；最多一个默认地址；无默认地址且未指定地址时安全阻断外卖；保存记录不包含未脱敏原始凭证或公开地址样例。 |
 | **S10-A3** | ⬜ | P0 | **会话与候选选择。** 建立“待选餐厅 → 待选餐品 → 待确认”的状态流；数字回复绑定用户、候选快照和 TTL，过期或越权选择失效。 | S10-A1、S10-A2 | `src/channel/core.ts`、`src/domain/session.ts`、`src/safety/` | 多候选时按顺序逐层选择；非法数字、重复选择、过期选择不会触发 MCP 写接口；跨用户不能读取或确认他人的候选。 |
 | **S10-A4** | ⬜ | P0 | **实时检索与模式兼容。** 到店模式先检索餐厅再读菜单；外卖先确定地址再检索可配送餐厅；餐品只在选定餐厅的实时菜单中匹配；取餐方式使用算价返回值。 | S10-A1~A3 | `src/domain/orderFlow.ts`、`src/mcp/gateway.ts`、`src/mcp/normalize.ts` | 支持堂食、自取、得来速、外卖；不支持的模式、失效餐品、闭店或地址不配送均返回固定人话；不猜测门店或 `takeWayCode`。 |
