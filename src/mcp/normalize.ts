@@ -142,7 +142,6 @@ export function humanizeMcpFailure(view: EnvelopeView): string {
     default:
       break;
   }
-  if (view.message) return view.message;
   return '麦当劳服务返回了未知错误，请稍后再试。';
 }
 
@@ -413,17 +412,45 @@ export function parsePrice(payload: Unknown): PriceBreakdown | undefined {
 
 /**
  * 订单创建结果解析。
- * `create-order` 属于写操作（SEC 红线），本项目只在 Mock 模式下产出，
- * 因此这里只做最小解析，拿不到就算失败。
+ * `create-order` 是真实网关的写操作；解析层只放行经过协议和域名校验的支付链接。
  */
 export function parseOrderResult(payload: Unknown): { orderId: string; payUrl: string; raw: unknown } | undefined {
   const view = readEnvelope(payload);
   const data = view.data;
   if (!isRecord(data)) return undefined;
   const orderId = pickString(data, ['orderId', 'orderNo', 'orderCode']);
-  const payUrl = pickString(data, ['payUrl', 'payLink', 'paymentUrl', 'cashierUrl', 'url']);
+  const candidateUrl = pickString(data, ['payUrl', 'payLink', 'paymentUrl', 'cashierUrl', 'url']);
   if (!orderId) return undefined;
-  return { orderId, payUrl: payUrl ?? '', raw: data };
+  return { orderId, payUrl: isSafePaymentUrl(candidateUrl) ? candidateUrl! : '', raw: data };
+}
+
+const DEFAULT_PAYMENT_HOSTS = ['example.invalid', 'mcd.cn', 'mcd.com.cn', 'mcdonalds.com.cn'];
+
+/**
+ * Payment links are never accepted from arbitrary protocols or hosts. The
+ * allowlist is configurable because the provider may change its cashier host.
+ */
+export function isSafePaymentUrl(value: string | undefined): value is string {
+  if (!value || value.length > 2_048 || value.trim() !== value) return false;
+  if (/[\u0000-\u001f\u007f]/.test(value)) return false;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) return false;
+
+  const configured = process.env.MCD_PAYMENT_HOSTS?.split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  const allowed = configured && configured.length > 0 ? configured : DEFAULT_PAYMENT_HOSTS;
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  return allowed.some((host) => {
+    const normalized = host.replace(/^\*\./, '').replace(/\.$/, '');
+    return hostname === normalized || hostname.endsWith(`.${normalized}`);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────

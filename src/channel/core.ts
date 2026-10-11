@@ -26,6 +26,8 @@ import {
 } from '../domain/favorites.ts';
 import { money, type SceneKey, type Store } from '../domain/types.ts';
 import { createGateway, describeScenes, type GatewayBundle, type DataGateway } from '../mcp/gateway.ts';
+import { createProductionOrderAttemptStore } from '../safety/orderAttemptStore.ts';
+import { internalErrorLabel, publicErrorMessage } from '../safety/publicError.ts';
 
 export type ReplyKind =
   | 'help'
@@ -84,7 +86,9 @@ export class ConversationCore {
     this.favorites = options.favorites ?? loadFavorites().config;
     this.sessions = options.sessions ?? new SessionStore();
     this.confirmations = options.confirmations ?? new ConfirmationService();
-    this.guard = options.guard ?? new OrderGuard();
+    this.guard = options.guard ?? new OrderGuard({
+      store: this.gateway.mode === 'real' ? createProductionOrderAttemptStore() : undefined,
+    });
   }
 
   /** 演示模式下每条回复都要挂标识，防止用户误以为已经真的下单了 */
@@ -99,7 +103,7 @@ export class ConversationCore {
       return await this.dispatch(userId, text, session);
     } catch (error) {
       // FR-19：任何异常都不能把 JSON 技术细节抛给用户
-      this.sessions.markError(userId, String(error));
+      this.sessions.markError(userId, internalErrorLabel(error));
       return {
         kind: 'error',
         text: `出了点问题：${friendlyError(error)}${this.modeBanner}`,
@@ -293,26 +297,29 @@ export class ConversationCore {
       return {
         kind: 'placed',
         orderId: order.orderId,
-        payUrl: order.payUrl,
+        ...(order.payUrl ? { payUrl: order.payUrl } : {}),
         text:
           `✅ 订单已创建：${order.orderId}\n` +
           `应付 ${money(preview.price.payableCents)}\n` +
           `${order.expireText ? `(${order.expireText})\n` : ''}` +
-          `👉 ${order.payUrl}\n\n` +
+          (order.payUrl
+            ? `👉 ${order.payUrl}\n\n`
+            : '支付链接暂不可用，请在官方订单中核对。\n\n') +
           '支付链接只发给你本人，请勿转发。',
       };
     } catch (error) {
-      // SEC-6：失败进终态，绝不自动重试
-      this.guard.fail(userId, preview.cart);
-      const authFailed = String(error).includes('401') || String(error).includes('Token');
-      if (authFailed) this.guard.markAuthFailed(userId);
+      // SEC-6：失败进终态，绝不自动重试。网络/超时结果未知时单独封存，
+      // 这样重启或多实例回放不会把可能已经创建的订单再写一次。
+      if (isAmbiguousOrderError(error)) this.guard.markUnknown(userId, preview.cart);
+      else this.guard.fail(userId, preview.cart);
+      if (isAuthFailure(error)) this.guard.markAuthFailed(userId);
       this.sessions.toIdle(userId);
+      const failureText = isAmbiguousOrderError(error)
+        ? '下单请求已发出但结果未知，请先到官方订单核对，不要重复确认或重新下单。'
+        : `下单失败：${friendlyError(error)}\n没有扣款，也没有自动重试。确认后请重新发起一次点单。`;
       return {
         kind: 'error',
-        text:
-          `下单失败：${friendlyError(error)}\n` +
-          '没有扣款，也没有自动重试。确认后请重新发起一次点单。' +
-          this.modeBanner,
+        text: failureText + this.modeBanner,
       };
     }
   }
@@ -366,7 +373,17 @@ export class ConversationCore {
 }
 
 function friendlyError(error: unknown): string {
-  const message = String(error instanceof Error ? error.message : error);
-  // 500 字够长了，再长的堆栈对用户毫无意义
-  return message.length > 300 ? `${message.slice(0, 300)}…` : message;
+  return publicErrorMessage(error);
+}
+
+function isAuthFailure(error: unknown): boolean {
+  const candidate = error as { readonly authFailed?: unknown; readonly httpStatus?: unknown };
+  return candidate.authFailed === true || candidate.httpStatus === 401 || candidate.httpStatus === 403;
+}
+
+function isAmbiguousOrderError(error: unknown): boolean {
+  const candidate = error as { readonly ambiguous?: unknown; readonly code?: unknown; readonly name?: unknown };
+  if (candidate.ambiguous === true) return true;
+  if (candidate.name === 'AbortError' || candidate.name === 'TimeoutError') return true;
+  return candidate.code === 'ETIMEDOUT' || candidate.code === 'UND_ERR_CONNECT_TIMEOUT';
 }

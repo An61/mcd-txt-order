@@ -17,6 +17,10 @@
 
 import type { Cart } from '../domain/types.ts';
 import { cartFingerprint } from '../mcp/normalize.ts';
+import {
+  InMemoryOrderAttemptStore,
+  type OrderAttemptStore,
+} from './orderAttemptStore.ts';
 
 // ─────────────────────────────────────────────────────────────
 // 策略
@@ -108,7 +112,7 @@ export interface EvaluateInput {
 interface AttemptRecord {
   readonly fingerprint: string;
   readonly atMs: number;
-  state: 'pending' | 'succeeded' | 'failed';
+  state: 'pending' | 'succeeded' | 'failed' | 'unknown';
   orderId?: string;
   /** 成功时的实付金额（分），用于每日累计限额 */
   cents?: number;
@@ -135,10 +139,12 @@ export class OrderGuard {
   private readonly policy: GuardPolicy;
   private readonly users = new Map<string, UserRecord>();
   private readonly now: () => number;
+  private readonly store: OrderAttemptStore;
 
-  constructor(options?: { policy?: GuardPolicy; now?: () => number }) {
+  constructor(options?: { policy?: GuardPolicy; now?: () => number; store?: OrderAttemptStore }) {
     this.policy = options?.policy ?? guardPolicyFromEnv();
     this.now = options?.now ?? (() => Date.now());
+    this.store = options?.store ?? new InMemoryOrderAttemptStore();
   }
 
   /**
@@ -147,7 +153,7 @@ export class OrderGuard {
    */
   evaluate(input: EvaluateInput): Verdict {
     const nowMs = this.now();
-    const user = this.users.get(input.userId);
+    const user = this.syncUser(input.userId);
     const fingerprint = cartFingerprint(input.cart);
 
     // SEC-7：凭据失效后，一切写操作立刻停摆
@@ -173,6 +179,12 @@ export class OrderGuard {
             : '这笔订单已经下过了，不会重复下单。',
           existingOrderId: prior.orderId,
         };
+      }
+      if (prior.state === 'unknown') {
+        return block(
+          'duplicate-settled',
+          '这笔订单的结果暂时无法确认，已停止自动重试。请先到订单记录核对，再重新发起点单。',
+        );
       }
       return block(
         'duplicate-settled',
@@ -259,31 +271,31 @@ export class OrderGuard {
     if (verdict.kind !== 'allowed') return { acquired: false, verdict };
 
     const nowMs = this.now();
-    const user = this.ensure(input.userId);
     const fingerprint = cartFingerprint(input.cart);
-    if (user.attempts.some((a) => a.fingerprint === fingerprint)) {
+    const claimed = this.store.claim({
+      userId: input.userId,
+      fingerprint,
+      atMs: nowMs,
+      cents: input.payableCents,
+    });
+    if (!claimed.acquired) {
       return { acquired: false, verdict: this.evaluate(input) };
     }
-
-    const payable = input.payableCents;
-    user.attempts.push({ fingerprint, atMs: nowMs, state: 'pending', cents: payable });
+    this.syncUser(input.userId);
     return { acquired: true, verdict: { kind: 'allowed' } };
   }
 
   /** 下单成功。成功后指纹成为终态，永远不会再下第二笔 */
   succeed(userId: string, cart: Cart, orderId?: string, cents?: number): void {
-    const user = this.ensure(userId);
+    const user = this.syncUser(userId);
     const fingerprint = cartFingerprint(cart);
     const nowMs = this.now();
-    const record = user.attempts.find((a) => a.fingerprint === fingerprint);
-    if (record) {
-      record.state = 'succeeded';
-      if (orderId) record.orderId = orderId;
-      if (cents !== undefined) record.cents = cents;
-    } else {
-      user.attempts.push({ fingerprint, atMs: nowMs, state: 'succeeded', orderId, cents });
+    if (!this.store.get(userId, fingerprint)) {
+      this.store.claim({ userId, fingerprint, atMs: nowMs, cents });
     }
-    user.lastSuccessAtMs = nowMs;
+    const settled = this.store.settleSuccess(userId, fingerprint, orderId, cents, nowMs);
+    this.syncUser(userId);
+    if (settled.state === 'succeeded') user.lastSuccessAtMs = settled.updatedAtMs;
   }
 
   /**
@@ -291,25 +303,39 @@ export class OrderGuard {
    * 用户想要重来，必须重新发一次点单指令，从而生成新的预览与新指纹。
    */
   fail(userId: string, cart: Cart): void {
-    const user = this.ensure(userId);
+    this.syncUser(userId);
     const fingerprint = cartFingerprint(cart);
-    const record = user.attempts.find((a) => a.fingerprint === fingerprint);
-    if (record) {
-      record.state = 'failed';
-    } else {
-      user.attempts.push({ fingerprint, atMs: this.now(), state: 'failed' });
+    const nowMs = this.now();
+    if (!this.store.get(userId, fingerprint)) {
+      this.store.claim({ userId, fingerprint, atMs: nowMs });
     }
+    this.store.settleFailure(userId, fingerprint, nowMs);
+    this.syncUser(userId);
+  }
+
+  /** Provider timeout/transport ambiguity is terminal until a human checks the order. */
+  markUnknown(userId: string, cart: Cart): void {
+    this.syncUser(userId);
+    const fingerprint = cartFingerprint(cart);
+    const nowMs = this.now();
+    if (!this.store.get(userId, fingerprint)) {
+      this.store.claim({ userId, fingerprint, atMs: nowMs });
+    }
+    this.store.markUnknown(userId, fingerprint, nowMs);
+    this.syncUser(userId);
   }
 
   /** SEC-7：401/403 之后立刻冻结该用户的所有写操作 */
   markAuthFailed(userId: string): void {
-    this.ensure(userId).authFailedAtMs = this.now();
+    const nowMs = this.now();
+    this.store.setAuthFailed(userId, nowMs);
+    this.syncUser(userId);
   }
 
   /** 重新拿到 Token 后解冻 */
   clearAuthFailed(userId: string): void {
-    const user = this.users.get(userId);
-    if (user) delete user.authFailedAtMs;
+    this.store.clearAuthFailed(userId);
+    this.syncUser(userId);
   }
 
   stats(userId: string): {
@@ -319,15 +345,16 @@ export class OrderGuard {
     readonly authFailed: boolean;
   } {
     const nowMs = this.now();
-    const attempts = this.users.get(userId)?.attempts ?? [];
+    const user = this.syncUser(userId);
+    const attempts = user.attempts;
     return {
       hourCount: attempts.filter((a) => a.state === 'succeeded' && a.atMs >= nowMs - HOUR_MS)
         .length,
       dayCount: attempts.filter((a) => a.state === 'succeeded' && a.atMs >= nowMs - DAY_MS).length,
-      ...(this.users.get(userId)?.lastSuccessAtMs === undefined
+      ...(user.lastSuccessAtMs === undefined
         ? {}
-        : { lastSuccessAtMs: this.users.get(userId)?.lastSuccessAtMs }),
-      authFailed: this.users.get(userId)?.authFailedAtMs !== undefined,
+        : { lastSuccessAtMs: user.lastSuccessAtMs }),
+      authFailed: user.authFailedAtMs !== undefined,
     };
   }
 
@@ -337,6 +364,28 @@ export class OrderGuard {
     const created: UserRecord = { attempts: [] };
     this.users.set(userId, created);
     return created;
+  }
+
+  private syncUser(userId: string): UserRecord {
+    const user = this.ensure(userId);
+    const stored = this.store.list(userId);
+    user.attempts = stored.map((attempt) => ({
+      fingerprint: attempt.fingerprint,
+      atMs: attempt.state === 'succeeded' ? attempt.updatedAtMs : attempt.atMs,
+      state: attempt.state,
+      ...(attempt.orderId === undefined ? {} : { orderId: attempt.orderId }),
+      ...(attempt.cents === undefined ? {} : { cents: attempt.cents }),
+    }));
+    const latestSuccess = stored
+      .filter((attempt) => attempt.state === 'succeeded')
+      .map((attempt) => attempt.updatedAtMs)
+      .sort((a, b) => b - a)[0];
+    if (latestSuccess === undefined) delete user.lastSuccessAtMs;
+    else user.lastSuccessAtMs = latestSuccess;
+    const authFailedAtMs = this.store.getAuthFailedAt(userId);
+    if (authFailedAtMs === undefined) delete user.authFailedAtMs;
+    else user.authFailedAtMs = authFailedAtMs;
+    return user;
   }
 
   private nextSlotMs(user: UserRecord | undefined, windowMs: number): number | undefined {

@@ -21,6 +21,7 @@ import { createGateway, describeScenes, GatewayError } from './mcp/gateway.ts';
 import { ConversationCore } from './channel/core.ts';
 import { ChannelServer, type WechatEncryptMode } from './channel/server.ts';
 import { loadFavorites, defaultCity } from './domain/favorites.ts';
+import { publicErrorMessage } from './safety/publicError.ts';
 
 loadDotEnv();
 
@@ -134,7 +135,7 @@ async function cmdDoctor(): Promise<void> {
   console.log(`Node            ${process.version}`);
   console.log(`项目根目录      ${findProjectRoot()}`);
   console.log(`MCP Token       ${mask(token)}`);
-  console.log(`MCP 地址        ${process.env.MCD_MCP_URL ?? 'https://mcp.mcd.cn'}`);
+  console.log(`MCP 地址        ${safeEndpointForLog(process.env.MCD_MCP_URL ?? 'https://mcp.mcd.cn')}`);
   console.log(`兜底城市        ${city ?? '⚠️ 未配置'}`);
   console.log(`收藏配置        ${favorites.sourcePath}${favorites.usedFallback ? '（示例）' : ''}`);
   console.log(`门店/餐品       ${favorites.config.stores.length} / ${favorites.config.meals.length}`);
@@ -190,7 +191,7 @@ async function cmdDoctor(): Promise<void> {
       console.log(`   ${tools.some((t) => t.name === name) ? '✅' : '❌'} ${name}`);
     }
   } catch (error) {
-    console.log(`❌ 连接失败：${String(error instanceof Error ? error.message : error)}`);
+    console.log(`❌ 连接失败：${publicErrorMessage(error)}`);
   }
 }
 
@@ -221,7 +222,7 @@ async function cmdChat(argv: readonly string[]): Promise<void> {
   try {
     core = new ConversationCore({ bundle: createGateway(mode) });
   } catch (error) {
-    console.log(`启动失败：${String(error instanceof Error ? error.message : error)}`);
+    console.log(`启动失败：${publicErrorMessage(error)}`);
     return;
   }
 
@@ -307,7 +308,7 @@ async function cmdServe(argv: readonly string[]): Promise<void> {
       modeLabel: bundle.gateway.describe(),
     });
   } catch (error) {
-    console.error(`\n⛔ 启动失败：${String(error instanceof Error ? error.message : error)}`);
+    console.error(`\n⛔ 启动失败：${publicErrorMessage(error)}`);
     process.exitCode = 1;
     return;
   }
@@ -468,13 +469,22 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   if (error instanceof GatewayError) {
-    console.error(`\n网关错误：${error.message}`);
+    console.error(`\n网关错误：${publicErrorMessage(error)}`);
     process.exitCode = 1;
     return;
   }
   console.error('\n执行失败：', error);
   process.exitCode = 1;
 });
+
+function safeEndpointForLog(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.protocol}//${url.host}${url.pathname}`;
+  } catch {
+    return '(配置无效)';
+  }
+}
 
 // 注意：这里刻意不做 re-export。`DataGateway` / `OrderPreview` 都是类型，
 // Node 原生类型剥离会把它们擦除，当值导出会直接报 "Export not defined"。

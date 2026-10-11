@@ -163,10 +163,15 @@ export function renderMockPage(initialMode: string): string {
       var data = await res.json();
       var tag = data.kind === 'placed' ? ('订单号 ' + (data.orderId || '')) : '';
       addRow('you', data.text || '(无回复)', tag);
-      if (data.payUrl) {
+      if (data.payUrl && /^https:\/\//i.test(data.payUrl)) {
         var a = document.createElement('div');
         a.className = 'tag';
-        a.innerHTML = '<a href="' + data.payUrl + '" target="_blank" rel="noopener">打开支付链接</a>';
+        var link = document.createElement('a');
+        link.href = data.payUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = '打开支付链接';
+        a.appendChild(link);
         chat.lastChild.appendChild(a);
       }
     } catch (e) {

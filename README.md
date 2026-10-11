@@ -105,7 +105,11 @@ MCP Token       CX5E****mXHS
 | `npm run favorites` | 查看已配置的门店与餐品别名 |
 | `npm run tools` | 列出 MCP 当前**实时**提供的工具（实测 35 个，比 README 多） |
 | `npm run serve` | 起 HTTP 服务，`/` 是网页模拟器，`/wechat` 是公众号回调 |
-| `npm run check` | 跑全部 **326 项**自检（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 礼节 24），离线可跑 |
+| `npm run check` | 跑全部离线自检（M1/M2/M4/M8 + M3 离线编排 + release scan）；有 Token 时 M3 额外执行只读远端链路，绝不调用 `create-order` |
+| `npm run typecheck` | 使用锁定的 TypeScript 与 Node 类型定义执行 `tsc --noEmit` |
+| `npm run check:s9:a1` | 验证 SQLite 订单 claim 的跨进程互斥、重启回放和 `unknown` 终态 |
+| `npm run check:s9:boundaries` | 验证支付 URL、MCP 传输、body 上限和应用限流 |
+| `npm run check:deploy` | 验证 Docker/Compose/Caddy/Nginx/systemd 的部署结构边界 |
 | `npm run check:release` | 只跑推送前礼节检查：凭据、手机号、支付链接、误入库的 `.env` |
 | `npm run ip` | 查公网出口 IP —— 填进公众号 IP 白名单，否则客服接口报 40164 |
 
@@ -279,9 +283,9 @@ src/
 | M3 | 下单编排 + 会话核心 + CLI 入口 | ✅ 36 项自检通过（含真实链路） |
 | M4 | 渠道层（模拟器 / 验签 / XML / 5 秒异步 / 去重） | ✅ 74 项自检通过 |
 | M5 | 参赛文件 | ✅ README / CONTEST_DECLARATION / MCP_INTEGRATION / workbuddy.md 已备齐 |
-| M6 | 发布报名 | ✅ 仓库已公开，活动仓库 Issue #361 已提交 |
+| M6 | 发布报名 | 🟨 仓库现已公开；Issue #361 曾提交但官方审核未通过，需重新提交 |
 | M7 | 冲榜物料 | ✅ 首屏演示图、接入手册、技术要点长文、礼节门禁 |
-| M8 | 生产上线 | ✅ 消息加解密 + 路由隔离 + 部署产物 + 上线手册，49 项自检通过 |
+| M8 | 生产上线 | ⛔ 消息加解密 + 路由隔离 + 部署产物 + 上线手册已完成；真实公网下单仍受 S9 Gate 阻塞 |
 
 > 本仓库是「麦当劳程序员节创意开发大赛」参赛作品。提交 `CONTEST_DECLARATION.md` / `MCP_INTEGRATION.md` 等文件均按要求放置。
 

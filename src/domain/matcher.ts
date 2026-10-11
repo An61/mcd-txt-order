@@ -148,10 +148,14 @@ function scoreOne<T extends MatchCandidate>(
       const ratio = name.length / needle.length;
       if (ratio < REVERSE_CONTAINS_MIN_RATIO) {
         // 交给下面的 fuzzy 兜底
-        return scoreFuzzy(name, needle, item);
+        const fuzzy = scoreFuzzy(name, needle, item.tags);
+        if (fuzzy === undefined) return undefined;
+        score = fuzzy.score;
+        level = 'fuzzy';
+      } else {
+        score = 0.5 + 0.4 * ratio;
+        level = 'contains';
       }
-      score = 0.5 + 0.4 * ratio;
-      level = 'contains';
     } else {
       const fuzzy = scoreFuzzy(name, needle, item.tags);
       if (fuzzy === undefined) return undefined;

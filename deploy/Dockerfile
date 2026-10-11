@@ -21,6 +21,7 @@ FROM base AS runtime
 COPY --chown=node:node src/ ./src/
 COPY --chown=node:node config/ ./config/
 COPY --chown=node:node package.json ./
+RUN mkdir -p /app/.cache && chown node:node /app/.cache
 
 USER node
 EXPOSE 8787

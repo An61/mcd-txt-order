@@ -100,7 +100,22 @@ PORT=8787
 
 # ── 麦当劳 MCP ──
 MCD_MCP_TOKEN=************************
+MCD_MCP_URL=https://mcp.mcd.cn
+# 公网 MCP 只允许 HTTPS；本机 HTTP 代理必须单独显式开启
+MCD_MCP_ALLOW_INSECURE_LOOPBACK=false
+# 实际支付域名白名单，逗号分隔；不填使用代码内置麦当劳域名白名单
+# MCD_PAYMENT_HOSTS=pay.mcd.cn,mcd.cn
+
+# ── 持久化与入口防护 ──
+ORDER_STATE_DB=/app/.cache/order-state.sqlite  # Docker；systemd 用 /opt/mcd-txt-order/.cache/order-state.sqlite
+ORDER_PENDING_TIMEOUT_MS=300000                # 进程重启时将过期 pending 封存为 unknown
+HTTP_MAX_BODY_BYTES=1048576
+HTTP_REQUEST_TIMEOUT_MS=5000
+HTTP_RATE_LIMIT_WINDOW_MS=60000
+HTTP_RATE_LIMIT_MAX=60
 ```
+
+`ORDER_STATE_DB` 必须位于持久卷。Docker Compose 已将 `/app/.cache` 挂到 `order-state` 卷；多实例跨主机时必须改为所有实例可见的共享持久存储。订单状态只保存购物车指纹、状态、金额和订单号，不保存 Token、支付链接或原始请求体。
 
 改完用体检命令确认一遍：
 
@@ -182,7 +197,8 @@ curl 'https://你的域名/wechat?signature=xxx&timestamp=1&nonce=1&echostr=hell
 
 ## 7. 上线前检查清单
 
-- [ ] `npm run check` 全绿（271+ 项）
+- [ ] `npm run typecheck`、`npm run check:deploy`、`npm run check:s9:a1`、`npm run check:s9:boundaries` 全绿
+- [ ] 无 Token 环境运行 `npm run check` 全绿；带 Token 的真实链路只做只读探针
 - [ ] `npm run doctor` 无任何 ⚠️
 - [ ] `npm run ip` 的出口 IP 已加入白名单
 - [ ] `curl https://域名/healthz` 返回 `ok: true`
@@ -191,6 +207,7 @@ curl 'https://你的域名/wechat?signature=xxx&timestamp=1&nonce=1&echostr=hell
 - [ ] 真实下单只在本人可控的情况下验证过一次（会产生真实订单与付款）
 - [ ] `.env` 权限 600 且不在 git 里（`npm run check:release` 会查）
 - [ ] 日志可查：`docker compose logs -f` 或 `journalctl -u mcd-txt-order -f`
+- [ ] 入口 body 上限、超时和限流与反代配置一致（Node/Caddy/Nginx 均为 1 MiB、5 秒）
 
 ---
 
@@ -222,7 +239,7 @@ sudo systemctl start mcd-txt-order
 1. **超时率**：链路 2~6 秒，超过 4.3 秒就走异步。若 `healthz` 的 `asyncPush` 为 false，
    说明客服消息没权限，用户感知会明显变慢 —— 换认证服务号可以解决。
 2. **去重命中**：`healthz` 的 `dedupeKeys` 持续增长说明微信在频繁重试，检查响应耗时。
-3. **下单失败**：`create-order` 失败**不重试**（会产生重复订单）。失败原因会原样回给用户。
+3. **下单失败**：`create-order` 失败**不重试**（会产生重复订单）。用户只看到固定人话；原始异常不得写入回复、支付链接或完整请求体。
 
 ---
 

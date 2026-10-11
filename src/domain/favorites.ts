@@ -102,7 +102,7 @@ export function loadFavorites(root?: string): LoadResult {
         config: readFallback(fallback, primary).config,
         sourcePath: primary,
         usedFallback: true,
-        warnings: [`收藏配置文件解析失败（${String(error)}），已回退到示例配置`],
+        warnings: ['收藏配置文件解析失败，已回退到示例配置'],
       };
     }
   }
@@ -153,7 +153,7 @@ function readFallback(fallbackPath: string, _primaryPath: string): { config: Fav
     const parsed = JSON.parse(readFileSync(fallbackPath, 'utf8')) as unknown;
     return { config: normalizeConfig(parsed), path: fallbackPath, warnings: [] };
   } catch (error) {
-    return { config: EMPTY_CONFIG, path: fallbackPath, warnings: [`示例配置文件解析失败：${String(error)}`] };
+    return { config: EMPTY_CONFIG, path: fallbackPath, warnings: ['示例配置文件解析失败'] };
   }
 }
 

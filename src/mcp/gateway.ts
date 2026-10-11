@@ -93,12 +93,14 @@ export class GatewayError extends Error {
   readonly code?: string | number;
   /** 401 时上层要冻结一切写操作（SEC-7） */
   readonly authFailed: boolean;
+  readonly ambiguous: boolean;
 
-  constructor(message: string, options: { code?: string | number; authFailed?: boolean } = {}) {
+  constructor(message: string, options: { code?: string | number; authFailed?: boolean; ambiguous?: boolean } = {}) {
     super(message);
     this.name = 'GatewayError';
     if (options.code !== undefined) this.code = options.code;
     this.authFailed = options.authFailed ?? false;
+    this.ambiguous = options.ambiguous ?? false;
   }
 }
 
@@ -247,7 +249,11 @@ export class RealGateway implements DataGateway {
     });
 
     const result = parseOrderResult(payload);
-    if (!result) throw new GatewayError('下单响应解析失败，订单状态未知，请到官方渠道核对后再操作。');
+    if (!result) {
+      throw new GatewayError('下单响应解析失败，订单状态未知，请到官方渠道核对后再操作。', {
+        ambiguous: true,
+      });
+    }
     return { ...result, raw: payload };
   }
 
@@ -261,18 +267,25 @@ export class RealGateway implements DataGateway {
     try {
       payload = unwrapToolResult((await this.client.callTool(tool, args)) as McpCallResult);
     } catch (error) {
-      const message = String(error);
+      const candidate = error as {
+        readonly ambiguous?: unknown;
+        readonly authFailed?: unknown;
+        readonly httpStatus?: unknown;
+      };
       // 401/403 必须让上层知道，用于 SEC-7 冻结
-      if (/HTTP 401|HTTP 403|Token/.test(message)) {
-        throw new GatewayError(message, { authFailed: true });
+      if (candidate.authFailed === true || candidate.httpStatus === 401 || candidate.httpStatus === 403) {
+        throw new GatewayError('MCP 认证失败。', { authFailed: true, ambiguous: candidate.ambiguous === true });
       }
-      throw new GatewayError(message);
+      if (candidate.ambiguous === true) {
+        throw new GatewayError('MCP 请求超时或连接中断。', { ambiguous: true });
+      }
+      throw new GatewayError('MCP 服务暂时不可用。');
     }
 
     const view = readEnvelope(payload);
     if (!view.success) {
       const human = humanizeMcpFailure(view);
-      throw new GatewayError(human || view.message || `${tool} 调用失败`, { code: view.code });
+      throw new GatewayError(human || `${tool} 调用失败`, { code: view.code });
     }
     return payload;
   }
@@ -308,8 +321,9 @@ export class SampleGateway implements DataGateway {
   }
 
   async getMealDetail(query: MealDetailQuery): Promise<MealDetail | undefined> {
-    if (query.code !== SAMPLE_MEAL_DETAIL.code) return undefined;
-    return SAMPLE_MEAL_DETAIL;
+    const detail = SAMPLE_MEAL_DETAIL;
+    if (!detail || query.code !== detail.code) return undefined;
+    return detail;
   }
 
   async calculatePrice(cart: Cart): Promise<PriceBreakdown> {

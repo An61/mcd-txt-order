@@ -39,10 +39,16 @@
     "check:m3": "node --experimental-strip-types scripts/check-m3.ts",
     "check:m4": "node --experimental-strip-types scripts/check-m4.ts",
     "check:m8": "node --experimental-strip-types scripts/check-m8.ts",
+    "check:s9:a1": "node --experimental-strip-types scripts/check-s9-a1.ts",
+    "check:s9:boundaries": "node --experimental-strip-types scripts/check-s9-boundaries.ts",
+    "check:deploy": "node --experimental-strip-types scripts/check-deploy.ts",
+    "typecheck": "tsc --noEmit",
     "gen:sample": "node --experimental-strip-types scripts/gen-sample.ts",
     "probe:chain": "node --experimental-strip-types scripts/probe-order-chain.ts",
     "probe:scenes": "node --experimental-strip-types scripts/probe-order-chain2.ts"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "typescript": "5.9.3"
+  }
 }

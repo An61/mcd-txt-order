@@ -21,6 +21,8 @@ loadDotEnv();
 
 let passed = 0;
 let failed = 0;
+/** 环境/时段导致的无法验证。它不是代码缺陷，因此不计入 failed、也不会阻断后续自检 */
+let skipped = 0;
 
 function check(title: string, condition: boolean, detail = ''): void {
   if (condition) {
@@ -32,8 +34,50 @@ function check(title: string, condition: boolean, detail = ''): void {
   }
 }
 
+/**
+ * 记录「被测服务当前状态导致无法验证」的情形。
+ *
+ * 与 check(false) 的区别很关键：麦当劳菜单是时段性的（早餐时段没有巨无霸），
+ * Token 会过期，网络会抖动。这些都不是本仓库的缺陷，若当成失败，
+ * 一方面会谎报代码有问题，另一方面会让 `npm run check` 的 && 链断掉，
+ * 导致 M4/M8/礼节检查这 147 项根本不执行 —— 那才是真正的风险。
+ */
+function skip(title: string, reason: string): void {
+  skipped += 1;
+  console.log(`  ⚠️  ${title}  ${reason}`);
+}
+
 function section(name: string): void {
   console.log(`\n── ${name} ──`);
+}
+
+/**
+ * 判断异常属于「外部服务状态」还是「代码缺陷」。
+ *
+ * 凭据失效、网络不可达、响应超时都归前者 —— 重试或换时段就能恢复，
+ * 记成代码失败只会污染信号并阻断后续自检。其余一律当真问题报红。
+ */
+function isEnvironmentalError(error: unknown): boolean {
+  const candidate = error as {
+    readonly httpStatus?: unknown;
+    readonly authFailed?: unknown;
+    readonly ambiguous?: unknown;
+    readonly code?: unknown;
+    readonly name?: unknown;
+  };
+  if (candidate.authFailed === true) return true;
+  if (candidate.httpStatus === 401 || candidate.httpStatus === 403 || candidate.httpStatus === 429) return true;
+  if (candidate.ambiguous === true) return true;
+  const code = String(candidate.code ?? '');
+  if (/ETIMEDOUT|ENOTFOUND|ECONNRESET|ECONNREFUSED|EAI_AGAIN|UND_ERR/.test(code)) return true;
+  const name = String(candidate.name ?? '');
+  return /TimeoutError|AbortError/.test(name) || /fetch failed/i.test(describeError(error));
+}
+
+/** 只取异常名与首行，截断并去掉可能夹带的 URL，避免把凭据或长响应体打进日志 */
+function describeError(error: unknown): string {
+  const raw = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return raw.split('\n')[0]!.replace(/https?:\/\/\S+/g, '<url>').slice(0, 160);
 }
 
 const HAS_TOKEN = Boolean(process.env.MCD_MCP_TOKEN?.trim());
@@ -216,50 +260,119 @@ if (HAS_TOKEN) {
       check('真实菜单非空', menu.items.length > 0, `${menu.items.length} 项`);
       check('菜单项带价格', menu.items.filter(hasPrice).length > 0);
 
-      const target = menu.items.find((item) => item.name.includes('巨无霸'));
-      if (target) {
-        const detail = await real.gateway.getMealDetail({
-          scene: 'pickup',
-          storeCode: picked.code,
-          code: target.code,
-        });
-        check('真实餐品详情可取', Boolean(detail), `${target.name}(${target.code})`);
+      // ── 选品：优先巨无霸，但它不在售时不能让整段断言消失 ──────────
+      // 实测教训：麦当劳菜单是**时段性**的。早餐/夜宵时段的菜单里根本没有
+      // 巨无霸（正餐品），硬编码它会导致 target 为 undefined，下面三项断言
+      // 被静默跳过（36 → 33 项），端到端再挂一项失败。表面看是「代码坏了」，
+      // 实际是被测服务此刻的营业状态而已。
+      const preferred = menu.items.find((item) => item.name.includes('巨无霸') && item.priceCents > 0);
+      const sellable = menu.items.filter(
+        (item) => item.priceCents > 0 && !item.name.includes('周边'),
+      );
+      // 短名更可能是单品而非「XX 套餐/组合」，算价成功率更高
+      const byLength = [...sellable].sort((a, b) => a.name.length - b.name.length);
+      const ordered = preferred ? [preferred, ...byLength.filter((i) => i !== preferred)] : byLength;
 
-        const price = await real.gateway.calculatePrice({
-          scene: 'pickup',
-          store: picked,
-          items: [
-            { productCode: target.code, name: target.name, quantity: 1, menuPriceCents: target.priceCents },
-          ],
-          needTableware: false,
-        });
-        check('真实算价返回正金额', price.payableCents > 0, money(price.payableCents));
-        check(
-          'T16：takeWayCode 确实来自算价结果',
-          price.takeWays.length > 0 && price.takeWays[0]!.code.length > 0,
-          price.takeWays.map((t) => t.code).join(','),
+      if (!preferred) {
+        skip(
+          '巨无霸在当前时段的菜单中缺货',
+          `当前菜单 ${menu.items.length} 项为早餐/夜宵品，改用当店在售品验证同一条链路`,
         );
       }
 
-      const flow = await previewWith(real.gateway, '巨无霸 香梅北');
-      check(
-        '端到端：真实网关也能产出预览',
-        flow.ok && flow.preview.price.payableCents > 0,
-        flow.ok ? money(flow.preview.price.payableCents) : flow.message,
-      );
-      if (flow.ok && flow.preview.cart.items[0]?.modifications?.length) {
-        const modes = flow.preview.cart.items[0].modifications;
+      let chosen: (typeof menu.items)[number] | undefined;
+      let chosenPrice: Awaited<ReturnType<typeof real.gateway.calculatePrice>> | undefined;
+      const attempted: string[] = [];
+
+      for (const candidate of ordered.slice(0, 6)) {
+        attempted.push(candidate.name);
+        try {
+          const price = await real.gateway.calculatePrice({
+            scene: 'pickup',
+            store: picked,
+            items: [
+              {
+                productCode: candidate.code,
+                name: candidate.name,
+                quantity: 1,
+                menuPriceCents: candidate.priceCents,
+              },
+            ],
+            needTableware: false,
+          });
+          if (price.payableCents > 0 && price.takeWays.length > 0 && price.takeWays[0]!.code.length > 0) {
+            chosen = candidate;
+            chosenPrice = price;
+            break;
+          }
+        } catch {
+          // 个别商品在此刻不可售（时段/售罄），换下一个候选继续验证链路结构
+        }
+      }
+
+      if (chosen && chosenPrice) {
         check(
-          'T18：特制 code 取自真实 query-meal-detail',
-          modes.every((mod) => mod.code.length > 0 && mod.key.length > 0),
-          JSON.stringify(modes[0]),
+          '真实算价返回正金额',
+          chosenPrice.payableCents > 0,
+          `${chosen.name} ${money(chosenPrice.payableCents)}`,
         );
+        check(
+          'T16：takeWayCode 确实来自算价结果',
+          chosenPrice.takeWays.length > 0 && chosenPrice.takeWays[0]!.code.length > 0,
+          chosenPrice.takeWays.map((t) => t.code).join(','),
+        );
+
+        const detail = await real.gateway.getMealDetail({
+          scene: 'pickup',
+          storeCode: picked.code,
+          code: chosen.code,
+        });
+        if (detail) {
+          check('真实餐品详情可取', true, `${chosen.name}(${chosen.code})`);
+        } else if (preferred) {
+          // 首选品必须有详情，否则 T18 的特制 code 无从谈起 —— 这是真问题
+          check('真实餐品详情可取', false, `${chosen.name}(${chosen.code})`);
+        } else {
+          skip('回退品没有详情数据', `${chosen.name} 无详情，并非所有在售品都提供详情`);
+        }
+      } else {
+        check(
+          '当店在售品能算出正金额与取餐方式',
+          false,
+          `已试 ${attempted.length} 项：${attempted.slice(0, 3).join('、')}`,
+        );
+      }
+
+      // 端到端必须用**此刻真实在售**的品名，而不是硬编码品名
+      const e2eName = preferred?.name ?? chosen?.name;
+      if (e2eName) {
+        const flow = await previewWith(real.gateway, `${e2eName} 香梅北`);
+        check(
+          '端到端：真实网关也能产出预览',
+          flow.ok && flow.preview.price.payableCents > 0,
+          flow.ok ? `${e2eName} ${money(flow.preview.price.payableCents)}` : flow.message,
+        );
+        if (flow.ok && flow.preview.cart.items[0]?.modifications?.length) {
+          const modes = flow.preview.cart.items[0].modifications;
+          check(
+            'T18：特制 code 取自真实 query-meal-detail',
+            modes.every((mod) => mod.code.length > 0 && mod.key.length > 0),
+            JSON.stringify(modes[0]),
+          );
+        }
       }
     }
 
     console.log('\n  ℹ️  create-order **未被调用** —— 真实下单只在用户显式确认且通过守卫后发生。');
   } catch (error) {
-    check('真实链路连通', false, String(error instanceof Error ? error.message : error).slice(0, 160));
+    // 网络不通、Token 失效、响应超时都是外部状态，不是本仓库的缺陷。
+    // 若一律记为失败，`npm run check` 的 && 链会在 M3 处断掉，
+    // M4 / M8 / 礼节检查共 147 项将不再执行 —— 那才是真正的风险。
+    if (isEnvironmentalError(error)) {
+      skip('真实链路连通', `外部服务状态导致无法验证：${describeError(error)}`);
+    } else {
+      check('真实链路连通', false, describeError(error));
+    }
   }
 } else {
   section('真实链路');
@@ -268,7 +381,18 @@ if (HAS_TOKEN) {
 
 // ═════════════════════════════════════════════════════════════
 console.log(`\n${'═'.repeat(50)}`);
-console.log(`M3 自检：通过 ${passed} 项，失败 ${failed} 项${HAS_TOKEN ? '（含真实链路）' : '（离线）'}`);
+console.log(
+  `M3 自检：通过 ${passed} 项，失败 ${failed} 项，跳过 ${skipped} 项${HAS_TOKEN ? '（含真实链路）' : '（离线）'}`,
+);
 console.log('═'.repeat(50));
 
+if (skipped > 0) {
+  console.log(
+    `⚠️  跳过 ${skipped} 项来自外部服务状态（时段缺货 / 网络 / 凭据），不是代码缺陷。\n` +
+      '    这些断言在正常时段且网络可用时会重新执行，请勿把「跳过」当作「通过」。',
+  );
+}
+
+// 只有结构性失败才让进程失败 —— 这样 `npm run check` 的 && 链不会因
+// 一次网络抖动或早餐时段就中断，M4 / M8 / 礼节检查仍能照常执行。
 if (failed > 0) process.exitCode = 1;

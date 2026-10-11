@@ -50,11 +50,22 @@ const REPLY_DEADLINE_MS = 4300;
 
 /** 待回补结果的存活时间（没客服接口时，等用户下次发言再补） */
 const PENDING_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+const DEFAULT_REQUEST_TIMEOUT_MS = 5_000;
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT_MAX = 60;
 
 /** 公众号后台的三种消息加解密方式 */
 export type WechatEncryptMode = 'plain' | 'mixed' | 'encrypt';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '']);
+
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number.parseInt(raw, 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
 
 export interface ServerOptions {
   readonly core: ConversationCore;
@@ -72,6 +83,12 @@ export interface ServerOptions {
   readonly now?: () => number;
   /** 留给被动回复的时间。默认 4.3 秒（微信 5 秒断连）；仅测试需要改它 */
   readonly replyDeadlineMs?: number;
+  /** Direct Node body limit; keep this equal to the reverse-proxy limit. */
+  readonly maxBodyBytes?: number;
+  /** Header/body timeout for direct connections. */
+  readonly requestTimeoutMs?: number;
+  readonly rateLimitWindowMs?: number;
+  readonly rateLimitMax?: number;
 }
 
 interface PendingResult {
@@ -94,6 +111,9 @@ export class ChannelServer {
   private readonly pending = new Map<string, PendingResult>();
   private readonly startedAtMs: number;
   private readonly replyDeadlineMs: number;
+  private readonly maxBodyBytes: number;
+  private readonly requestTimeoutMs: number;
+  private readonly rateLimiter: RequestRateLimiter;
 
   constructor(options: ServerOptions) {
     this.core = options.core;
@@ -105,6 +125,13 @@ export class ChannelServer {
     this.modeLabel = options.modeLabel ?? '真实模式';
     this.now = options.now ?? Date.now;
     this.replyDeadlineMs = options.replyDeadlineMs ?? REPLY_DEADLINE_MS;
+    this.maxBodyBytes = options.maxBodyBytes ?? positiveIntEnv('HTTP_MAX_BODY_BYTES', DEFAULT_MAX_BODY_BYTES);
+    this.requestTimeoutMs = options.requestTimeoutMs ?? positiveIntEnv('HTTP_REQUEST_TIMEOUT_MS', DEFAULT_REQUEST_TIMEOUT_MS);
+    this.rateLimiter = new RequestRateLimiter(
+      options.rateLimitWindowMs ?? positiveIntEnv('HTTP_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS),
+      options.rateLimitMax ?? positiveIntEnv('HTTP_RATE_LIMIT_MAX', DEFAULT_RATE_LIMIT_MAX),
+      this.now,
+    );
     this.startedAtMs = this.now();
 
     // 安全默认值：监听地址不是回环就意味着要对外服务，此时调试入口必须关掉，
@@ -158,9 +185,11 @@ export class ChannelServer {
   listen(): Promise<Server> {
     const server = createServer((req, res) => {
       void this.route(req, res).catch((error: unknown) => {
-        this.fail(res, 500, String(error));
+        this.fail(res, 500, '服务器暂时无法处理请求');
       });
     });
+    server.requestTimeout = this.requestTimeoutMs;
+    server.headersTimeout = this.requestTimeoutMs + 1_000;
 
     return new Promise((resolve) => {
       server.listen(this.port, this.host, () => resolve(server));
@@ -172,6 +201,11 @@ export class ChannelServer {
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const path = url.pathname;
+
+    if (this.isRateLimited(req, path)) {
+      this.fail(res, 429, '请求过于频繁，请稍后再试');
+      return;
+    }
 
     if (req.method === 'GET' && (path === '/' || path === '/demo')) {
       if (!this.exposeMock) return this.fail(res, 404, 'Not Found');
@@ -210,7 +244,12 @@ export class ChannelServer {
   }
 
   private async apiChat(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const body = await readBody(req);
+    let body: string;
+    try {
+      body = await readBody(req, this.maxBodyBytes, this.requestTimeoutMs);
+    } catch (error) {
+      return this.handleBodyError(res, error);
+    }
     let parsed: { userId?: unknown; text?: unknown } = {};
     try {
       parsed = JSON.parse(body) as { userId?: unknown; text?: unknown };
@@ -262,7 +301,13 @@ export class ChannelServer {
     const timestamp = url.searchParams.get('timestamp') ?? '';
     const nonce = url.searchParams.get('nonce') ?? '';
 
-    const raw = await readBody(req);
+    let raw: string;
+    try {
+      raw = await readBody(req, this.maxBodyBytes, this.requestTimeoutMs);
+    } catch (error) {
+      this.handleBodyError(res, error);
+      return;
+    }
 
     // ── 解密 ───────────────────────────────────────────────
     let xml = raw;
@@ -287,7 +332,7 @@ export class ChannelServer {
       try {
         xml = this.crypto.decrypt(encrypt);
       } catch (error) {
-        this.fail(res, 400, `解密失败：${String(error instanceof Error ? error.message : error)}`);
+        this.fail(res, 400, '消息解密失败');
         return;
       }
       encryptedRequest = true;
@@ -407,7 +452,7 @@ export class ChannelServer {
     void task
       .then((lateText) => this.deliverLater(openId, lateText))
       .catch((error: unknown) => {
-        void this.deliverLater(openId, `处理失败：${String(error)}`);
+        void this.deliverLater(openId, '处理失败，请稍后重新发起。');
       });
     return undefined;
   }
@@ -455,6 +500,24 @@ export class ChannelServer {
   private fail(res: ServerResponse, status: number, message: string): void {
     res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(message);
+  }
+
+  private isRateLimited(req: IncomingMessage, path: string): boolean {
+    if (path !== '/wechat' && path !== '/api/chat') return false;
+    const address = req.socket.remoteAddress ?? 'unknown';
+    return !this.rateLimiter.allow(`${req.method ?? 'UNKNOWN'}:${path}:${address}`);
+  }
+
+  private handleBodyError(res: ServerResponse, error: unknown): void {
+    if (error instanceof BodyLimitError) {
+      this.fail(res, 413, '请求体过大');
+      return;
+    }
+    if (error instanceof BodyTimeoutError) {
+      this.fail(res, 408, '请求超时');
+      return;
+    }
+    this.fail(res, 400, '无法读取请求体');
   }
 }
 
@@ -505,8 +568,8 @@ export function resolveWechatVerify(params: {
     if (!crypto) return { ok: false, body: '安全模式缺少 WECHAT_ENCODING_AES_KEY' };
     try {
       return { ok: true, body: crypto.decrypt(echostr) };
-    } catch (error) {
-      return { ok: false, body: `echostr 解密失败：${String(error instanceof Error ? error.message : error)}` };
+    } catch {
+      return { ok: false, body: 'echostr 解密失败' };
     }
   }
 
@@ -537,10 +600,86 @@ export function extractText(envelope: Record<string, string>): string | undefine
   return undefined;
 }
 
-async function readBody(req: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk);
+class BodyLimitError extends Error {}
+class BodyTimeoutError extends Error {}
+
+class RequestRateLimiter {
+  private readonly hits = new Map<string, { count: number; resetAtMs: number }>();
+  private readonly windowMs: number;
+  private readonly max: number;
+  private readonly now: () => number;
+
+  constructor(
+    windowMs: number,
+    max: number,
+    now: () => number,
+  ) {
+    this.windowMs = windowMs;
+    this.max = max;
+    this.now = now;
   }
-  return Buffer.concat(chunks).toString('utf8');
+
+  allow(key: string): boolean {
+    const nowMs = this.now();
+    const current = this.hits.get(key);
+    if (!current || current.resetAtMs <= nowMs) {
+      this.hits.set(key, { count: 1, resetAtMs: nowMs + this.windowMs });
+      this.trim(nowMs);
+      return true;
+    }
+    if (current.count >= this.max) return false;
+    current.count += 1;
+    return true;
+  }
+
+  private trim(nowMs: number): void {
+    if (this.hits.size < 10_000) return;
+    for (const [key, value] of this.hits) {
+      if (value.resetAtMs <= nowMs) this.hits.delete(key);
+    }
+  }
+}
+
+function readBody(req: IncomingMessage, maxBytes: number, timeoutMs: number): Promise<string> {
+  return new Promise((resolveBody, rejectBody) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      req.resume();
+      rejectBody(new BodyTimeoutError());
+    }, timeoutMs);
+    timer.unref?.();
+
+    const finish = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) rejectBody(error);
+      else resolveBody(Buffer.concat(chunks).toString('utf8'));
+    };
+
+    const onData = (chunk: Buffer | string): void => {
+      const buffer = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+      total += buffer.byteLength;
+      if (total > maxBytes) {
+        req.resume();
+        finish(new BodyLimitError());
+        return;
+      }
+      chunks.push(buffer);
+    };
+    req.on('data', onData);
+    req.once('end', () => finish());
+    req.once('aborted', () => finish(new BodyTimeoutError()));
+    req.once('error', () => finish(new Error('request body read failed')));
+
+    const contentLength = Number(req.headers['content-length'] ?? '');
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      req.resume();
+      finish(new BodyLimitError());
+    }
+  });
 }

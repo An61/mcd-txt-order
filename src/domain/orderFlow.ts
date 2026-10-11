@@ -14,7 +14,7 @@
  * 所有失败都转成**人话**（FR-19），绝不把 JSON 异常抛给用户。
  */
 
-import { GatewayError, type DataGateway } from '../mcp/gateway.ts';
+import type { DataGateway } from '../mcp/gateway.ts';
 import { cartFingerprint } from '../mcp/normalize.ts';
 import { buildModification, describeModification } from './modification.ts';
 import {
@@ -23,6 +23,7 @@ import {
   type MatchCandidate,
 } from './matcher.ts';
 import { parseItemSpecs, type RawItemSpec } from './qty.ts';
+import { publicErrorMessage } from '../safety/publicError.ts';
 import { normalizeCompact, trimPunctuation } from './text.ts';
 import {
   defaultCity as resolveDefaultCity,
@@ -147,7 +148,7 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
     // 靠关键词猜会误伤「酥酥多笋卷」这类品名（实测教训）
     const resolution = resolveItemText(spec.name, candidates, { limit: 5 });
     const outcome = resolution.outcome;
-    const specText = resolution.specText ?? spec.specText;
+    const specText = resolution.specText;
 
     if (outcome.status === 'miss') {
       return fail('item-not-found', `没在「${store.name}」的菜单里找到「${spec.name}」。`);
@@ -382,8 +383,7 @@ function fail(reason: FlowFailure, message: string): FailureResult {
 }
 
 function failureFrom(error: unknown, prefix: string): FailureResult {
-  const detail = error instanceof GatewayError ? error.message : String(error);
-  return { ok: false, reason: 'gateway', message: `${prefix}：${detail}` };
+  return { ok: false, reason: 'gateway', message: `${prefix}：${publicErrorMessage(error)}` };
 }
 
 function escapeRegExp(input: string): string {

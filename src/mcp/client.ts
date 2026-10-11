@@ -14,12 +14,14 @@ export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export class McpError extends Error {
   readonly code?: number | string;
   readonly httpStatus?: number;
+  readonly ambiguous: boolean;
 
-  constructor(message: string, options: { code?: number | string; httpStatus?: number } = {}) {
+  constructor(message: string, options: { code?: number | string; httpStatus?: number; ambiguous?: boolean } = {}) {
     super(message);
     this.name = 'McpError';
     this.code = options.code;
     this.httpStatus = options.httpStatus;
+    this.ambiguous = options.ambiguous ?? false;
   }
 }
 
@@ -57,6 +59,8 @@ export interface McpClientOptions {
   timeoutMs?: number;
   /** 是否自动完成 initialize 握手，默认 true */
   autoInitialize?: boolean;
+  /** Only permit plain HTTP for an explicit loopback proxy. */
+  allowInsecureLoopback?: boolean;
 }
 
 export class McpStreamableHttpClient {
@@ -68,7 +72,11 @@ export class McpStreamableHttpClient {
   private initialized = false;
 
   constructor(options: McpClientOptions = {}) {
-    this.url = pickFirstString(options.url, process.env.MCD_MCP_URL) ?? DEFAULT_MCP_URL;
+    const configuredUrl = pickFirstString(options.url, process.env.MCD_MCP_URL) ?? DEFAULT_MCP_URL;
+    this.url = validateMcpUrl(
+      configuredUrl,
+      options.allowInsecureLoopback ?? process.env.MCD_MCP_ALLOW_INSECURE_LOOPBACK === 'true',
+    );
     this.token = pickFirstString(options.token, process.env.MCD_MCP_TOKEN) ?? '';
     this.timeoutMs = options.timeoutMs ?? 30_000;
   }
@@ -113,35 +121,19 @@ export class McpStreamableHttpClient {
           lastError = error;
         }
       }
-      throw new McpError(
-        `无法从 SSE 响应中解析 JSON-RPC 报文${lastError ? `：${String(lastError)}` : ''}`,
-      );
+      void lastError;
+      throw new McpError('无法解析 MCP 响应。');
     }
 
     try {
       return JSON.parse(raw) as JsonRpcEnvelope;
-    } catch (error) {
-      throw new McpError(`MCP 返回的不是合法 JSON：${String(error)}`);
+    } catch {
+      throw new McpError('MCP 返回了无法解析的响应。');
     }
   }
 
   /** 非 2xx 时把麦当劳网关的错误码尽量带上，方便定位是 Token 问题还是限流问题 */
   private async describeHttpFailure(response: Response): Promise<McpError> {
-    let detail = '';
-    try {
-      const text = await response.text();
-      if (text) {
-        try {
-          const parsed = JSON.parse(text) as { code?: unknown; msg?: unknown; message?: unknown };
-          detail = String(parsed.msg ?? parsed.message ?? parsed.code ?? '').trim();
-        } catch {
-          detail = text.slice(0, 200);
-        }
-      }
-    } catch {
-      /* 读取失败就忽略 */
-    }
-
     if (response.status === 401) {
       return new McpError('MCP Token 无效、已过期或未提供（HTTP 401）。请到 https://open.mcd.cn/mcp 重新申请。', {
         httpStatus: 401,
@@ -157,7 +149,7 @@ export class McpStreamableHttpClient {
         httpStatus: 429,
       });
     }
-    return new McpError(`MCP 请求失败（HTTP ${response.status}）${detail ? `：${detail}` : ''}`, {
+    return new McpError(`MCP 请求失败（HTTP ${response.status}）。`, {
       httpStatus: response.status,
     });
   }
@@ -175,7 +167,12 @@ export class McpStreamableHttpClient {
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(this.timeoutMs),
     }).catch((error: unknown) => {
-      throw new McpError(`无法连接 MCP 服务 ${this.url}：${String(error)}`);
+      const name = error instanceof Error ? error.name : '';
+      const ambiguous = name === 'AbortError' || name === 'TimeoutError' || name === 'ConnectTimeoutError';
+      throw new McpError(
+        ambiguous ? 'MCP 请求超时或连接中断，订单结果需要人工核对。' : '无法连接 MCP 服务。',
+        { ambiguous },
+      );
     });
 
     const returnedSessionId = response.headers.get('mcp-session-id');
@@ -190,7 +187,7 @@ export class McpStreamableHttpClient {
     const envelope = this.parseBody(raw, response.headers.get('content-type') ?? '');
 
     if (envelope.error) {
-      throw new McpError(`MCP ${method} 返回错误 ${String(envelope.error.code)}：${envelope.error.message ?? ''}`, {
+      throw new McpError(`MCP ${method} 返回错误。`, {
         code: envelope.error.code,
       });
     }
@@ -229,6 +226,28 @@ export class McpStreamableHttpClient {
     const result = await this.request<McpCallResult>('tools/call', { name, arguments: args });
     return result ?? {};
   }
+}
+
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+
+function validateMcpUrl(value: string, allowInsecureLoopback: boolean): string {
+  if (value.length > 2_048 || /[\u0000-\u001f\u007f]/.test(value)) {
+    throw new McpError('MCD_MCP_URL 配置无效。');
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new McpError('MCD_MCP_URL 配置无效。');
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash || !parsed.hostname) {
+    throw new McpError('MCD_MCP_URL 不得包含凭据、查询参数或片段。');
+  }
+  if (parsed.protocol === 'https:') return parsed.toString();
+  if (parsed.protocol === 'http:' && allowInsecureLoopback && LOOPBACK_HOSTS.has(parsed.hostname)) {
+    return parsed.toString();
+  }
+  throw new McpError('MCD_MCP_URL 必须使用 HTTPS；仅允许显式配置的本机回环 HTTP 代理。');
 }
 
 /** 把 ToolResult 里的 content / structuredContent 收敛成可直接遍历的数据 */

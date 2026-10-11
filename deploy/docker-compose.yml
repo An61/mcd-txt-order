@@ -19,6 +19,7 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: "8787"
+      ORDER_STATE_DB: /app/.cache/order-state.sqlite
       # 对外服务时默认就会关掉调试入口，这里显式写死防止误开
       EXPOSE_MOCK: "false"
     volumes:
@@ -26,6 +27,8 @@ services:
       # 注意：本地可能只有 favorites.example.json（真实 favorites.json 通常被 .gitignore 排除），
       # 此时容器会回退到示例配置并打出警告 —— 属正常行为。
       - ../config:/app/config:ro
+      # 订单 claim 状态必须跨容器重启保留；多实例部署需改为共享持久存储。
+      - order-state:/app/.cache
     networks:
       - mcd-net
     logging:
@@ -53,6 +56,7 @@ services:
 volumes:
   caddy-data:
   caddy-config:
+  order-state:
 
 networks:
   mcd-net:
