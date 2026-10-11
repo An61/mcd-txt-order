@@ -47,10 +47,26 @@ function section(name: string): void {
 }
 
 const ROOT = findProjectRoot();
-const PROBE = resolve(ROOT, '.cache', 'probe');
+
+/**
+ * 探针快照的读取顺序：**先 `fixtures/probe/`（已入库），再 `.cache/probe/`（本地真实探针产物）**。
+ *
+ * 曾经只从 `.cache/probe/` 读，而该目录被 .gitignore 排除 —— 于是 CI 全新 clone 后
+ * 快照不存在，`parseStores(undefined)` 返回空数组，M1 的「门店解析出结果」等断言直接失败。
+ * 本地目录里有 `.cache`，所以本地永远绿、只在 CI 红，问题被掩盖了很久。
+ *
+ * 现在 M1 依赖的 6 个快照已固化进 `fixtures/probe/` 随仓库分发，
+ * 保证「clone 即可跑」名副其实（README 正是这么承诺的）。
+ * 若两处都没有，则 readProbe 返回 undefined，相关断言**照常失败**——
+ * 缺快照是真实缺陷，不应当作「环境差异」跳过。
+ */
+const PROBE_DIRS = [resolve(ROOT, 'fixtures', 'probe'), resolve(ROOT, '.cache', 'probe')];
 const readProbe = (name: string): unknown => {
-  const path = resolve(PROBE, name);
-  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  for (const dir of PROBE_DIRS) {
+    const path = resolve(dir, name);
+    if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf8'));
+  }
+  return undefined;
 };
 
 // ─────────────────────────────────────────────────────────────

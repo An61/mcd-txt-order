@@ -1,0 +1,129 @@
+{
+  "success": true,
+  "code": 200,
+  "message": "请求成功",
+  "datetime": "2026-10-10 10:11:18",
+  "traceId": "f329e684c09a54bb7a20fa6a186eb241",
+  "data": [
+    {
+      "storeCode": "1420602",
+      "storeName": "麦当劳深圳香梅北餐厅",
+      "address": "香梅路天然居商业中心一层L1-5/6-1号商铺",
+      "distance": 374,
+      "businessStatus": true,
+      "businessStartTime": "06:45",
+      "businessEndTime": "23:59",
+      "longitude": 0,
+      "latitude": 0,
+      "reservation": true,
+      "reservationTimeOptions": [
+        {
+          "date": "2026-10-10",
+          "today": true,
+          "reservationOptionText": "午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至23:45)"
+        },
+        {
+          "date": "2026-10-11",
+          "today": false,
+          "reservationOptionText": "早餐(07:14至10:15)，午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至22:46)"
+        }
+      ]
+    },
+    {
+      "storeCode": "1420402",
+      "storeName": "麦当劳深圳梅林路餐厅",
+      "address": "北环大道与梅林路交汇处佐阾虹湾购物中心一楼L1018",
+      "distance": 982,
+      "businessStatus": true,
+      "businessStartTime": "00:00",
+      "businessEndTime": "23:59",
+      "longitude": 0,
+      "latitude": 0,
+      "reservation": true,
+      "reservationTimeOptions": [
+        {
+          "date": "2026-10-10",
+          "today": true,
+          "reservationOptionText": "午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至23:59)"
+        },
+        {
+          "date": "2026-10-11",
+          "today": false,
+          "reservationOptionText": "宵夜(00:00至04:45,22:14至23:59)，早餐(05:14至10:15)，午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)"
+        }
+      ]
+    },
+    {
+      "storeCode": "1420062",
+      "storeName": "麦当劳深圳景田餐厅",
+      "address": "莲花路金色家园首层F#",
+      "distance": 1237,
+      "businessStatus": true,
+      "businessStartTime": "00:00",
+      "businessEndTime": "23:59",
+      "longitude": 0,
+      "latitude": 0,
+      "reservation": true,
+      "reservationTimeOptions": [
+        {
+          "date": "2026-10-10",
+          "today": true,
+          "reservationOptionText": "午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至23:59)"
+        },
+        {
+          "date": "2026-10-11",
+          "today": false,
+          "reservationOptionText": "宵夜(00:00至04:45,22:14至23:59)，早餐(05:14至10:15)，午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)"
+        }
+      ]
+    },
+    {
+      "storeCode": "1421003",
+      "storeName": "麦当劳深圳梅丽路(APark)餐厅",
+      "address": "梅林街道下梅社区梅丽路9号 A PARK 深圳数字艺术公园 G1-08 & L1-09商铺",
+      "distance": 1446,
+      "businessStatus": true,
+      "businessStartTime": "00:00",
+      "businessEndTime": "23:59",
+      "longitude": 0,
+      "latitude": 0,
+      "reservation": true,
+      "reservationTimeOptions": [
+        {
+          "date": "2026-10-10",
+          "today": true,
+          "reservationOptionText": "午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至23:59)"
+        },
+        {
+          "date": "2026-10-11",
+          "today": false,
+          "reservationOptionText": "宵夜(00:00至04:45,22:14至23:59)，早餐(05:14至10:15)，午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)"
+        }
+      ]
+    },
+    {
+      "storeCode": "1421179",
+      "storeName": "麦当劳深圳梅林安荟邻餐厅",
+      "address": "梅林街道梅林路142号梅林一村1栋梅林安荟邻1008号",
+      "distance": 1593,
+      "businessStatus": true,
+      "businessStartTime": "07:00",
+      "businessEndTime": "23:00",
+      "longitude": 0,
+      "latitude": 0,
+      "reservation": true,
+      "reservationTimeOptions": [
+        {
+          "date": "2026-10-10",
+          "today": true,
+          "reservationOptionText": "午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至22:46)"
+        },
+        {
+          "date": "2026-10-11",
+          "today": false,
+          "reservationOptionText": "早餐(07:14至10:15)，午餐(10:44至14:15)，下午茶(14:44至16:45)，夜市(17:14至21:45)，宵夜(22:14至22:46)"
+        }
+      ]
+    }
+  ]
+}
