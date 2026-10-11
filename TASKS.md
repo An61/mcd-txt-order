@@ -277,7 +277,7 @@
 | 1 | 本机无 nginx / systemctl，镜像拉取未完成，无法取得 `nginx -t`、systemd 与回滚证据 | **🟢 已解除（配置验证层）** | Docker Desktop 本机可用且守护进程在跑；`nginx:1.27-alpine` 拉取成功，`nginx -t` 退出码 0 且 `syntax is ok / test is successful`；`debian:bookworm-slim` + systemd 252.39 的 `systemd-analyze verify` 无语法错误。原判定基于「镜像拉取未完成」这一已过期的前提。剩余只有**带真实证书与域名的目标机启动**，属部署动作而非验证缺口。 |
 | 2 | 真实微信账号、公网回调、真实 `create-order` 未授权 | **🔴 维持阻塞** | 这是授权问题，不是能力问题。会真实产生资金与对外消息，未经用户明确授权不得执行。对应 T17。 |
 | 3 | provider 未公开原生幂等键契约，不能臆造字段 | **🟡 降级：不构成 A1 的阻塞，改为设计约束** | A1 的目标本就是「应用层第二道防线」——官方**没有**原生幂等键恰恰是这个方案存在的理由，而不是它的缺口。它只排除了「改用 provider 原生幂等键」这一从未列入计划的选项。A1 的验收按其文字已达成（`check:s9:a1` 通过 + 双容器共享卷 claim 互斥 true/false）。**建议 A1 由 🟨 转 ✅**，把「真实订单验收」归到 T17 而非继续挂在 A1 上。 |
-| 4 | GitHub Issues 写权限不足，重提返回 `403 Resource not accessible by integration` | **🟢 已解除** | GitHub MCP 工具已注册进当前会话，`get_me` 返回 `An61`（id 131420747，public_repos 3）。403 是连接未生效时的历史状态，现已可写。 |
+| 4 | GitHub Issues 写权限不足，重提返回 `403 Resource not accessible by integration` | **🔴 维持阻塞（本轮曾误判为已解除，已实测纠正）** | 本轮一度因 `get_me` 成功而判定「已解除」，**这是错的**：`get_me` 是读操作，不能证明写权限。随后实测 `issue_write` 两次均 403：一次对活动仓库 `M-China/mcd-developer-innovation-challenge`，一次对本人仓库 `An61/mcd-txt-order`，**两者皆 `403 Resource not accessible by integration`**。结论：当前 GitHub 集成是**只读**的（读工具如 `get_me`/`issue_read`/`list_commits` 可用，写工具被拒）。报名 Issue 只能由用户手动粘贴提交，或由用户提供具备 `repo`/`issues:write` 权限的 PAT。 |
 
 已回读活动仓库 Issue #361 的官方评论（`M-China-Official`，COLLABORATOR，2026-10-10T14:59:30Z）：
 
@@ -292,4 +292,5 @@
 - CodeGraph 历史索引记录保留；本轮不把旧索引统计当作生产 Gate 证据。
 - Node 原生检查与 `tsc --noEmit` 均通过。
 - 真实 MCP 链路仅做只读检索、菜单、详情和算价；`create-order` 未调用。
-- **GitHub 状态（2026-10-11 更新）**：`An61/mcd-txt-order` 为 Public；活动仓库 Issue #361 官方回执为“未通过审核，项目无法访问”。**GitHub MCP 写权限已在本会话恢复**（`get_me` 返回 An61），403 为历史状态，重新提交已具备条件。
+- **GitHub 状态（2026-10-11 更正）**：`An61/mcd-txt-order` 为 Public；活动仓库 Issue #361 官方回执为“未通过审核，项目无法访问”。GitHub MCP **读**工具可用（`get_me` 返回 An61、`list_commits`、`issue_read` 均成功），但**写**工具 `issue_write` 对活动仓库与本人仓库均返回 403，故**重新提交仍未完成**，需用户手动提交或提供 PAT。报名文案已按官方 `activityGuidelines.md` 的 Issue 格式示例校订（`docs/REGISTRATION_ISSUE.md`，正文 859 字、无图片）。
+- **报名格式已核对（2026-10-11）**：官方规则要求「通过指定 Issue 模板提交」，但对活动仓库查询 `.github` 与 `.github/ISSUE_TEMPLATE` 均返回「路径不存在」，即**当前无模板文件**，按规则正文中的纯文本格式示例提交即可。规则同时要求仓库含 `README.md`、`CONTEST_DECLARATION.md`、`MCP_INTEGRATION.md`、`mcp-config.example.json`、`workbuddy.md` —— 本仓库五项齐备。报名截止 **2026-10-25 23:59**（排行榜数据截止 10-26 00:00）。

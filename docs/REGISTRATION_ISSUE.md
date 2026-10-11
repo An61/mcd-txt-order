@@ -18,11 +18,9 @@
 【参赛申请】
 项目名称：mcd-txt-order 麦当劳一句话点餐助手
 项目地址：https://github.com/An61/mcd-txt-order
-项目简介：
+项目简介：基于麦当劳官方 MCP（https://mcp.mcd.cn）开发的微信公众号点餐助手。用户预置喜爱的门店与餐品后，发送「巨无霸 香梅北」这类短句，即可自动完成门店检索、菜单匹配与实时算价，回复「确认」后返回支付链接。
 
-基于麦当劳官方 MCP（https://mcp.mcd.cn）开发的微信公众号点餐助手。用户预置喜爱的门店与餐品后，发送「巨无霸 香梅北」这类短句，即可自动完成门店检索、菜单匹配、实时算价，回复「确认」后返回支付链接。
-
-已实现的 MCP 编排链路：query-nearby-stores（收藏餐厅优先，为空则回退关键词检索）→ query-meals → 需特制时 query-meal-detail → calculate-price → 用户二次确认；另接入 query-store-coupons、list-nutrition-foods 等只读能力。真实 create-order 涉及资金，当前受 S9 生产 Gate 保护，未执行真实写入。
+已实现的 MCP 编排链路：query-nearby-stores（收藏餐厅优先，为空则回退关键词检索）→ query-meals → 需特制时 query-meal-detail → calculate-price → 用户二次确认；另接入 query-store-coupons、list-nutrition-foods 等只读能力。create-order 为真实写操作，设计上必须经用户二次确认后才调用，演示模式不会写入。
 
 三点技术取舍：
 一、零第三方依赖，用 Node 22 原生 TypeScript 手写 Streamable HTTP MCP 客户端，同时兼容 JSON 与 SSE 两种响应体。
