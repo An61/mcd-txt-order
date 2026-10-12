@@ -400,7 +400,7 @@
 | **PRIORITY** | P1（体验主线）；资金安全继续按 P0 处理 |
 | **DEPENDENCIES** | T14~T19、T21~T23、T37；依赖 S9-A1/A2/A4/A6 的已验证安全基线 |
 | **OWNER** | Main（当前执行线程）；实现阶段可按下方任务卡分派，但共享 `TASKS.md` 由 Main 串行维护 |
-| **ACTIVE_BINDING** | owner=Main（A7 独立复核与收口完成；无 active writer）；branch=`master`；worktree=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；base=`6b72f4a`；write-scope=`src/domain/`, `src/channel/core.ts`, `src/mcp/`, `scripts/check-s10-a3.ts`~`scripts/check-s10-a6.ts`, `fixtures/s10-scenarios.json`, `README.md`, `package.json`, `TASKS.md`；A2 候选 worktree 保留为恢复快照 |
+| **ACTIVE_BINDING** | owner=Main（A7 独立复核与收口完成；无 active writer）；branch=`master`；worktree=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；base=`6b72f4a`；checkpoint=`58f403c`；HEAD=`58f403c`；write-scope=`src/domain/`, `src/channel/core.ts`, `src/mcp/`, `scripts/check-s10-a3.ts`~`scripts/check-s10-a6.ts`, `fixtures/s10-scenarios.json`, `README.md`, `package.json`, `TASKS.md`；A2 候选 worktree 保留为恢复快照 |
 | **OWNER_RELEASE_RECEIPT** | released=`/root/mcd_search_s10_exec_a02_a01`（原实现）；released=`/root/mcd_search_s10_exec_a02_a02`（P1/P2 修复）；scope=`src/domain/addressBook.ts`, `src/safety/addressBookStore.ts`, `src/mcp/gateway.ts`, `scripts/check-s10-a2.ts`；revision=dirty on base `32a235c`; timestamp=2026-10-12；reason=worker final returned, no active writer |
 | **DISPOSITION / RECOVERY_REF** | disposition=`INTEGRATED`；local commits=`b40b84f`, `792b7af`, `5efd535`；candidate=`C:\Users\安\WorkBuddy\Worktrees\McDonald\s10-a2-mcd-txt-order` retained；recovery_ref=`32a235c` + attributable dirty paths；Main-owned `docs/PROGRESS.md` explicitly attributed |
 | **ADMISSION_INVENTORY_RECEIPT** | repository=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；bindings=Main(master, 控制文档/脚本接入), A2 Worker(codex/s10-address-book, 地址簿源码/专用检查), A2 repair Worker(新鲜候选，仅 `src/domain/addressBook.ts`/`src/mcp/gateway.ts`)；worktrees=上述 original + candidate，两者 base/HEAD=`32a235c`；Main 新增归属 `docs/PROGRESS.md`；shared-resources=忽略的旧 `.cache`/凭据/数据库禁止访问，验证使用独立临时数据库；inventory=COMPLETE；unknown=runtime model/reasoning 无字段回执，UNVERIFIED；timestamp=2026-10-12 |
@@ -413,12 +413,12 @@
 | **REPAIR_STATE** | attempt=1；score=2（P1 边界修复）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION |
 | **S10-A1_EVIDENCE** | commit=`db024de`；`npm run check:s10:a1` PASS；`npm run typecheck` PASS；全量 `npm run check`、`check:release`、`check:s9:boundaries` PASS；独立复核 PASS；证据上限为本地离线静态与自检，不代表真实 MCP/生产验收 |
 | **S10-A2_EVIDENCE** | commit=`b40b84f`（本地）；base=`32a235cdb680ba98d599c0089f0f8389b729a99a`；2026-10-12 `check:s10:a2`、`typecheck`、全量 `check`（333 项）、`check:release`、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；中文门牌与嵌套 envelope 回归断言 PASS；独立复核与定向 re-review PASS；无真实 MCP 写调用或真实部署；证据上限为本地离线/静态/合成 |
-| **S10-A3_EVIDENCE** | 当前 revision=`6b72f4a` + 工作树变更；新增 `npm run check:s10:a3` PASS；`npm run typecheck`、全量 `npm run check`（含 A1/A2/A3）、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；覆盖门店→餐品候选串联、非法/重复/过期/跨用户选择和无 `create-order` 写调用；无真实 MCP 写调用或真实部署；证据上限为本地离线/静态/合成 |
+| **S10-A3_EVIDENCE** | reviewed base=`6b72f4a` + owned diff；checkpoint=`58f403c`；新增 `npm run check:s10:a3` PASS；`npm run typecheck`、全量 `npm run check`（含 A1/A2/A3）、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；覆盖门店→餐品候选串联、非法/重复/过期/跨用户选择和无 `create-order` 写调用；无真实 MCP 写调用或真实部署；证据上限为本地离线/静态/合成 |
 | **S10-A3_REVIEW_STATE** | Reviewer=`/root/mcd_search_s10_review_a03_a01`；requested=GPT-6.1 Sol/medium；首次容量 ROUTE_FAILURE 后同路由重试完成；context=fresh；verdict=PASS；未发现 P0/P1/P2/P3；runtime model/reasoning=UNVERIFIED；证据上限保持本地离线/静态/合成 |
 | **S10-A4_EVIDENCE** | 当前工作树 revision=`6b72f4a`；`npm run check:s10:a4` PASS；覆盖 pickup、dineIn、driveThrough、delivery 的场景映射，配送 `addressId` 进入门店检索/购物车/算价，缺地址 fail-closed；无真实 MCP 写调用或真实部署 |
 | **S10-A5_EVIDENCE** | `npm run check:s10:a5` PASS；价格变化会在确认前重新算价并重新签发令牌，取餐方式与地址进入购物车指纹，旧预览不会直接触发 `create-order`；支付 URL 继续由既有白名单解析层保护；证据上限为本地离线/静态/合成 |
 | **S10-A6_EVIDENCE** | `fixtures/s10-scenarios.json`、README 场景说明和 `npm run check:s10:a6` PASS；全量 `npm run check`、`typecheck`、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；无真实地址、Token、支付链接或公网写操作 |
-| **S10-A7_EVIDENCE** | Reviewer=`/root/mcd_search_s10_review_a07_a01`；独立复核 PASS，P0/P1/P2/P3=0；`npm run typecheck`、`check:s10:a3`~`check:s10:a6`、全量 `check`（含 release 扫描）、`git diff --check` PASS；审查 revision=`6b72f4a` + 当前 dirty diff；所有变更路径已归属，未 push、未真实部署、未调用真实 `create-order` |
+| **S10-A7_EVIDENCE** | Reviewer=`/root/mcd_search_s10_review_a07_a01`；独立复核 PASS，P0/P1/P2/P3=0；`npm run typecheck`、`check:s10:a3`~`check:s10:a6`、全量 `check`（含 release 扫描）、`git diff --check` PASS；审查 base=`6b72f4a` + owned diff；checkpoint=`58f403c`；所有变更路径已归属，未 push、未真实部署、未调用真实 `create-order` |
 | **S10-A7_REVIEW_STATE** | requested=GPT-6.1 Sol/medium；context=fresh；runtime model/reasoning=UNVERIFIED；verdict=PASS；证据上限为本地静态/离线/合成 fixtures，不能证明真实 MCP、真实地址簿、真实支付或生产部署 |
 | **S10-A2_REVIEW_STATE** | `/root/mcd_search_s10_review_a02_a01` requested=GPT-6 Luna/high，首次与唯一重试均为容量 ROUTE_FAILURE；successor=`/root/mcd_search_s10_review_a02_a02` requested=GPT-6.1 Sol/medium，首次容量 ROUTE_FAILURE，唯一重试后完成独立复核与定向 re-review PASS；effective model/reasoning=UNVERIFIED；context=fresh；证据上限保持本地离线/静态/合成 |
 | **S10-A2_REVIEW_FINDINGS** | Reviewer=`/root/mcd_search_s10_review_a02_a02`；初审 P1 `src/domain/addressBook.ts:107-110` 中文门牌可能将完整地址放入候选 label、P2 `src/mcp/gateway.ts:148-153` 未解嵌套 `data.data` 已修复；定向 re-review PASS；`docs/PROGRESS.md` 已归属 Main；无新的 P0/P1/P2；证据上限为本地静态/合成 |
@@ -428,7 +428,7 @@
 | **S10-A7_FINAL_BOUNDARIES** | A4~A6 验收条件已满足，A7 独立复核已 PASS，S10 已完成本地证据收口。生产启用仍受 S9-A4/A7、T17、真实微信与目标机 Gate 约束 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
-| **CLEAN_RECONCILIATION** | `DIRTY_ATTRIBUTED` on base/HEAD=`6b72f4a`：tracked changes归属 S10-A4~A7 owned paths；untracked `docs/normal-successor-continuation-plan.md` 为既有 successor 恢复包，保留原位；A2 candidate `s10-a2-mcd-txt-order` 保留；origin/master=`c74c141`；未 push、未 cleanup |
+| **CLEAN_RECONCILIATION** | checkpoint=`58f403c`；当前 tracked tree 已清洁；仅 untracked `docs/normal-successor-continuation-plan.md` 为既有 successor 恢复包，保留原位；A2 candidate `s10-a2-mcd-txt-order` 保留；origin/master=`c74c141`；未 push、未 cleanup |
 | **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### S10 子任务编排
