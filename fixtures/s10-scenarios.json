@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "evidenceCeiling": "local-synthetic-only",
+  "stores": [
+    { "code": "synthetic-store-east", "name": "示例星河东店", "city": "示例市" },
+    { "code": "synthetic-store-west", "name": "示例星河西店", "city": "示例市" }
+  ],
+  "addresses": [
+    { "addressId": "synthetic-address-home", "alias": "家", "providerScope": "synthetic-provider" },
+    { "addressId": "synthetic-address-office", "alias": "公司", "providerScope": "synthetic-provider" }
+  ],
+  "cases": [
+    "store-candidate-selection",
+    "meal-candidate-selection",
+    "candidate-expiry",
+    "cross-user-selection",
+    "delivery-address-required",
+    "delivery-address-stale",
+    "unsupported-mode",
+    "price-change-reconfirmation"
+  ]
+}

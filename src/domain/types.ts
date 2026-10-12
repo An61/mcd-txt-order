@@ -217,6 +217,10 @@ export interface Cart {
   readonly scene: SceneKey;
   readonly store: Store;
   readonly items: readonly CartItem[];
+  /** Provider address reference required by delivery/group-meal scenes. */
+  readonly addressId?: string;
+  /** Provider take-way code selected from calculate-price. */
+  readonly takeWayCode?: string;
   /** 预约时间，格式 `yyyy-MM-dd HH:mm`。一旦设置，全链路必须一致（FR-26） */
   readonly reservationDate?: string;
   readonly needTableware: boolean;

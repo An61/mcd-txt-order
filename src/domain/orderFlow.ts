@@ -50,7 +50,9 @@ import {
 
 export type FlowFailure =
   | 'need-store'
+  | 'need-address'
   | 'store-not-found'
+  | 'ambiguous-store'
   | 'need-item'
   | 'item-not-found'
   | 'ambiguous-item'
@@ -71,6 +73,11 @@ export interface FailureResult {
   readonly message: string;
   /** 需要用户从候选中选一个时附上，用户可用「1 / 第一个」回答 */
   readonly candidates?: readonly string[];
+  /** Internal values aligned with candidates; never rendered to the user. */
+  readonly candidateValues?: readonly string[];
+  readonly candidateKind?: 'store' | 'item';
+  /** Store selected during the first resolution layer, if any. */
+  readonly storeCode?: string;
 }
 
 export type FlowResult = PreviewResult | FailureResult;
@@ -80,6 +87,14 @@ export interface BuildPreviewInput {
   readonly favorites: FavoritesConfig;
   readonly rawText: string;
   readonly scene?: SceneKey;
+  /** Confirmed provider address reference for delivery/group-meal scenes. */
+  readonly addressId?: string;
+  /** Parsed provider-facing query text; never treated as a provider code. */
+  readonly storeQuery?: string;
+  readonly mealQuery?: string;
+  readonly modifierText?: string;
+  /** Preferred take-way code selected from the caller's explicit mode. */
+  readonly preferredTakeWayCode?: string;
   /** 澄清态已选定 / 会话记住的门店，优先于重新解析 */
   readonly pinnedStoreCode?: string;
   /** 用户在候选中选中的官方品名。给了就不再从 rawText 里猜品名 */
@@ -102,6 +117,10 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
     getScene(scene);
   } catch {
     return fail('unsupported-scene', `暂不支持的场景：${scene}`);
+  }
+  const sceneDefinition = getScene(scene);
+  if (sceneDefinition.requiresAddressId && !input.addressId?.trim()) {
+    return fail('need-address', '外送需要先选择一个已确认的配送地址，暂未继续检索。');
   }
 
   // ── ① 门店 ────────────────────────────────────────────────
@@ -131,7 +150,9 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
   // 用户在候选中选过名字时直接用官方品名，不再从原文里猜 —— 否则"选了 2 又猜回 1"
   const specs = input.pinnedItemName
     ? parseItemSpecs(input.pinnedItemName)
-    : stripStoreToken(input.rawText, store.name, favorites);
+    : input.mealQuery
+      ? parseItemSpecs(input.mealQuery)
+      : stripStoreToken(input.rawText, store.name, favorites);
   if (specs.length === 0) {
     return fail('need-item', '想吃点什么？例如「巨无霸」「两个巨无霸一杯可乐」。');
   }
@@ -143,12 +164,15 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
 
   // ── ④ 逐项匹配 + 处理特制 ─────────────────────────────────
   const items: CartItem[] = [];
-  for (const spec of specs) {
+  for (const [specIndex, spec] of specs.entries()) {
     // 切「品名 + 特制」必须用菜单感知的 resolveItemText：
     // 靠关键词猜会误伤「酥酥多笋卷」这类品名（实测教训）
     const resolution = resolveItemText(spec.name, candidates, { limit: 5 });
     const outcome = resolution.outcome;
-    const specText = resolution.specText;
+    const specText = [
+      resolution.specText,
+      specIndex === 0 ? input.modifierText : undefined,
+    ].filter((value): value is string => Boolean(value && value.trim())).join('，') || undefined;
 
     if (outcome.status === 'miss') {
       return fail('item-not-found', `没在「${store.name}」的菜单里找到「${spec.name}」。`);
@@ -159,6 +183,9 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
         reason: 'ambiguous-item',
         message: `「${spec.name}」有几种可能，回复序号选一个：`,
         candidates: outcome.candidates.map((entry) => entry.item.name),
+        candidateValues: outcome.candidates.map((entry) => entry.item.name),
+        candidateKind: 'item',
+        storeCode: store.code,
       };
     }
 
@@ -185,6 +212,7 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
     scene,
     store,
     items,
+    ...(input.addressId ? { addressId: input.addressId } : {}),
     needTableware: input.needTableware ?? false,
     ...(input.reservationDate ? { reservationDate: input.reservationDate } : {}),
   };
@@ -197,7 +225,10 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
     return failureFrom(error, '算价失败，未继续下单');
   }
 
-  const takeWay = price.takeWays[0];
+  const takeWay = selectTakeWay(price.takeWays, input.preferredTakeWayCode);
+  if (input.preferredTakeWayCode && !takeWay) {
+    return fail('gateway', '当前算价结果没有对应的取餐方式，已停止下单。');
+  }
   if (getScene(scene).requiresTakeWayCode && !takeWay) {
     // 拿不到取餐方式就停在这里 —— 拿猜的值去创建真实订单是拿资金冒险
     return fail('gateway', '没能取到取餐方式，已停止下单。请稍后重试。');
@@ -207,13 +238,14 @@ export async function buildPreview(input: BuildPreviewInput): Promise<FlowResult
     notes.push(`已自动抵扣 ${money(price.discountCents)}`);
   }
 
+  const finalCart = takeWay ? { ...cart, takeWayCode: takeWay.code } : cart;
   return {
     ok: true,
     preview: {
-      cart,
+      cart: finalCart,
       takeWay: takeWay ?? { code: '', title: '默认' },
       price,
-      fingerprint: cartFingerprint(cart),
+      fingerprint: cartFingerprint(finalCart),
     },
     notes,
     elapsedMs: Date.now() - startedAt,
@@ -239,12 +271,13 @@ async function resolveStore(
   scene: SceneKey,
 ): Promise<StoreStepOk | StoreStepBad> {
   const { gateway, favorites } = input;
+  const sceneDefinition = getScene(scene);
   const hint = resolveStoreAlias(input.rawText, favorites);
   // StoreHint 把名称挂在 favorite 上（hint.favorite.name），不是 hint.name
   const city = hint?.favorite.city ?? resolveDefaultCity(favorites);
-  const keyword = hint?.favorite.name ?? detectKeyword(input.rawText, favorites);
+  const keyword = input.storeQuery ?? hint?.favorite.name ?? detectKeyword(input.rawText, favorites);
 
-  if (!city) {
+  if (!sceneDefinition.requiresAddressId && !city) {
     return {
       ok: false,
       result: fail(
@@ -254,45 +287,88 @@ async function resolveStore(
       ),
     };
   }
-  if (!keyword) {
+  if (!sceneDefinition.requiresAddressId && !keyword) {
     return { ok: false, result: fail('need-store', '请问是哪家门店？可以说店名，例如「星河」。') };
   }
 
   let stores: Store[];
   try {
-    stores = await gateway.listStores({ scene, city, keyword });
+    stores = await gateway.listStores({
+      scene,
+      ...(city ? { city } : {}),
+      ...(keyword ? { keyword } : {}),
+      ...(input.addressId ? { addressId: input.addressId } : {}),
+    });
   } catch (error) {
     return { ok: false, result: failureFrom(error, '检索门店失败') };
   }
   if (stores.length === 0) {
-    return { ok: false, result: fail('store-not-found', `在 ${city} 没找到「${keyword}」附近的门店。`) };
+    return {
+      ok: false,
+      result: fail(
+        'store-not-found',
+        sceneDefinition.requiresAddressId
+          ? '当前配送地址没有可配送的门店。'
+          : `在 ${city} 没找到「${keyword}」附近的门店。`,
+      ),
+    };
   }
 
   // 实测：keyword **不会真的按名称过滤**（搜「星河」会返回周边一堆店），
-  // 所以必须本地再匹配一次再取最像的那家。「别名的归别名，名单的归名单」。
-  const wanted = hint?.favorite.name ?? keyword;
-  const best =
-    (input.pinnedStoreCode ? stores.find((s) => s.code === input.pinnedStoreCode) : undefined) ??
-    bestStore(stores, wanted) ??
-    stores[0]!;
+  // 所以必须本地再匹配一次；近分候选必须交给用户，不能取第一家。
+  const wanted = input.storeQuery ?? hint?.favorite.name ?? keyword ?? '';
+  const pinned = input.pinnedStoreCode ? stores.find((s) => s.code === input.pinnedStoreCode) : undefined;
+  const ranked = rankStores(stores, wanted);
+  const best = pinned ?? ranked[0]?.store ?? (stores.length === 1 ? stores[0] : undefined);
+
+  if (!best) {
+    const fallback = stores.slice(0, 5);
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        reason: 'ambiguous-store',
+        message: `附近找到多家门店，请回复序号选择「${wanted}」要去的店：`,
+        candidates: fallback.map((entry) => entry.name),
+        candidateValues: fallback.map((entry) => entry.code),
+        candidateKind: 'store',
+      },
+    };
+  }
+
+  if (!pinned && ranked.length > 1 && ranked[1] && ranked[0] && ranked[0].score - ranked[1].score < STORE_AMBIGUITY_GAP) {
+    const candidates = ranked.slice(0, 5);
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        reason: 'ambiguous-store',
+        message: `「${wanted}」对应多家门店，请回复序号选择：`,
+        candidates: candidates.map((entry) => entry.store.name),
+        candidateValues: candidates.map((entry) => entry.store.code),
+        candidateKind: 'store',
+      },
+    };
+  }
 
   const note = input.pinnedStoreCode === best.code ? `已沿用上次门店：${best.name}` : undefined;
   return note ? { ok: true, store: best, note } : { ok: true, store: best };
 }
 
-function bestStore(stores: readonly Store[], wanted: string): Store | undefined {
+const STORE_AMBIGUITY_GAP = 0.5;
+
+interface RankedStore {
+  readonly store: Store;
+  readonly score: number;
+}
+
+function rankStores(stores: readonly Store[], wanted: string): RankedStore[] {
   const needle = normalizeCompact(wanted);
-  if (!needle) return undefined;
-  let best: Store | undefined;
-  let bestScore = 0;
-  for (const store of stores) {
-    const score = scoreStore(normalizeCompact(store.name), needle);
-    if (score > bestScore) {
-      bestScore = score;
-      best = store;
-    }
-  }
-  return bestScore > 0 ? best : undefined;
+  if (!needle) return [];
+  return stores
+    .map((store) => ({ store, score: scoreStore(normalizeCompact(store.name), needle) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.store.code.localeCompare(b.store.code));
 }
 
 function scoreStore(name: string, needle: string): number {
@@ -300,6 +376,17 @@ function scoreStore(name: string, needle: string): number {
   if (name === needle) return 3;
   if (name.includes(needle)) return 2 + Math.min(needle.length / name.length, 1);
   return 0;
+}
+
+function selectTakeWay(
+  takeWays: readonly { readonly code: string; readonly title: string }[],
+  preferredCode: string | undefined,
+): { readonly code: string; readonly title: string } | undefined {
+  if (!preferredCode) return takeWays[0];
+  const normalized = normalizeCompact(preferredCode);
+  return takeWays.find((takeWay) =>
+    normalizeCompact(takeWay.code) === normalized || normalizeCompact(takeWay.title) === normalized,
+  );
 }
 
 function detectKeyword(rawText: string, favorites: FavoritesConfig): string | undefined {

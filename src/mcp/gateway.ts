@@ -239,12 +239,16 @@ export class RealGateway implements DataGateway {
 
   async calculatePrice(cart: Cart): Promise<PriceBreakdown> {
     const scene = getScene(cart.scene);
+    if (scene.requiresAddressId && !cart.addressId?.trim()) {
+      throw new GatewayError('外送场景缺少已确认的 addressId，已停止算价。');
+    }
     const payload = await this.call('calculate-price', {
       storeCode: cart.store.code,
       orderType: scene.orderType,
       beType: scene.beType,
       items: buildItems(cart),
       needTableware: cart.needTableware,
+      ...(scene.requiresAddressId ? { addressId: cart.addressId } : {}),
       ...sceneExtras(cart.scene, cart.store),
       // FR-26：预约时间必须全链路一致
       ...(cart.reservationDate ? { reservationDate: cart.reservationDate } : {}),
@@ -264,6 +268,9 @@ export class RealGateway implements DataGateway {
     if (scene.requiresTakeWayCode && !takeWayCode) {
       throw new GatewayError('到店/得来速场景缺少 takeWayCode，且该值只能从算价结果取得，已中止下单。');
     }
+    if (scene.requiresAddressId && !cart.addressId?.trim()) {
+      throw new GatewayError('外送场景缺少已确认的 addressId，已中止下单。');
+    }
 
     const payload = await this.call('create-order', {
       storeCode: cart.store.code,
@@ -271,6 +278,7 @@ export class RealGateway implements DataGateway {
       beType: scene.beType,
       items: buildItems(cart),
       needTableware: cart.needTableware,
+      ...(scene.requiresAddressId ? { addressId: cart.addressId } : {}),
       ...(scene.requiresTakeWayCode ? { takeWayCode } : {}),
       ...sceneExtras(cart.scene, cart.store),
       ...(cart.reservationDate ? { reservationDate: cart.reservationDate } : {}),
@@ -349,6 +357,9 @@ export class SampleGateway implements DataGateway {
 
   async listStores(query: StoreQuery): Promise<Store[]> {
     const wanted = query.keyword?.trim();
+    if (getScene(query.scene).requiresAddressId && !query.addressId?.trim()) {
+      throw new GatewayError('外送场景需要先确认配送地址。');
+    }
     if (!wanted) return [...SAMPLE_STORES];
     // 快照模式也走真实的名称包含匹配，保持与真实网关一致的语义
     const hit = SAMPLE_STORES.filter((store) => store.name.includes(wanted));
@@ -370,6 +381,9 @@ export class SampleGateway implements DataGateway {
   }
 
   async calculatePrice(cart: Cart): Promise<PriceBreakdown> {
+    if (getScene(cart.scene).requiresAddressId && !cart.addressId?.trim()) {
+      throw new GatewayError('外送场景缺少已确认的 addressId，已停止算价。');
+    }
     const original = cartMenuTotalCents(cart.items);
     const discount = Math.round(original * 0.1);
     const lines = cart.items.map((item) => ({

@@ -25,7 +25,9 @@ import {
   type FavoritesConfig,
 } from '../domain/favorites.ts';
 import { money, type SceneKey, type Store } from '../domain/types.ts';
+import { parseSearchOrder, type NamedSearchOrderInput } from '../domain/searchOrder.ts';
 import { createGateway, describeScenes, type GatewayBundle, type DataGateway } from '../mcp/gateway.ts';
+import { cartFingerprint } from '../mcp/normalize.ts';
 import { createProductionOrderAttemptStore } from '../safety/orderAttemptStore.ts';
 import { internalErrorLabel, publicErrorMessage } from '../safety/publicError.ts';
 
@@ -54,6 +56,27 @@ export interface CoreOptions {
   readonly sessions?: SessionStore;
   readonly confirmations?: ConfirmationService;
   readonly guard?: OrderGuard;
+  /** Resolve a user-facing saved-address reference to a provider addressId. */
+  readonly deliveryAddressResolver?: DeliveryAddressResolver;
+}
+
+export interface DeliveryAddressResolution {
+  readonly addressId: string;
+  readonly alias?: string;
+}
+
+export type DeliveryAddressResolver = (input: {
+  readonly userId: string;
+  readonly reference: string;
+}) => Promise<DeliveryAddressResolution | undefined>;
+
+interface BuildRequest {
+  readonly scene: SceneKey;
+  readonly addressId?: string;
+  readonly storeQuery?: string;
+  readonly mealQuery?: string;
+  readonly modifierText?: string;
+  readonly preferredTakeWayCode?: string;
 }
 
 const HELP_TEXT = [
@@ -78,6 +101,7 @@ export class ConversationCore {
   private readonly sessions: SessionStore;
   private readonly confirmations: ConfirmationService;
   private readonly guard: OrderGuard;
+  private readonly deliveryAddressResolver?: DeliveryAddressResolver;
 
   constructor(options: CoreOptions = {}) {
     const bundle = options.bundle ?? createGateway();
@@ -86,6 +110,7 @@ export class ConversationCore {
     this.favorites = options.favorites ?? loadFavorites().config;
     this.sessions = options.sessions ?? new SessionStore();
     this.confirmations = options.confirmations ?? new ConfirmationService();
+    this.deliveryAddressResolver = options.deliveryAddressResolver;
     this.guard = options.guard ?? new OrderGuard({
       store: this.gateway.mode === 'real' ? createProductionOrderAttemptStore() : undefined,
     });
@@ -151,15 +176,16 @@ export class ConversationCore {
   // ── 下单 ──────────────────────────────────────────────────
 
   private async startOrder(userId: string, rawText: string, confident: boolean): Promise<CoreReply> {
-    const scene = (this.favorites.rules.defaultScene ?? 'pickup') as SceneKey;
+    const request = await this.resolveBuildRequest(userId, rawText);
+    if (!request.ok) return request.reply;
     const result = await buildPreview({
       gateway: this.gateway,
       favorites: this.favorites,
       rawText,
-      scene,
+      ...request.request,
     });
 
-    if (!result.ok) return this.fromFailure(userId, result, confident);
+    if (!result.ok) return this.fromFailure(userId, result, confident, rawText);
 
     const ticket = this.confirmations.issue({ userId, cart: result.preview.cart });
     const transition = this.sessions.toConfirming(userId, result.preview, ticket.token);
@@ -171,14 +197,19 @@ export class ConversationCore {
     return { kind: 'preview', text: card + this.modeBanner };
   }
 
-  private fromFailure(userId: string, result: FlowResult, _confident: boolean): CoreReply {
+  private fromFailure(userId: string, result: FlowResult, _confident: boolean, rawText = ''): CoreReply {
     if (result.ok) return { kind: 'reply', text: '' };
 
-    if (result.reason === 'ambiguous-item' && result.candidates?.length) {
+    if ((result.reason === 'ambiguous-item' || result.reason === 'ambiguous-store') && result.candidates?.length) {
       const draft: SessionDraft = {
-        rawText: '',
+        rawText,
         specs: [],
-        candidates: result.candidates.map((label) => ({ label, value: label })),
+        candidates: result.candidates.map((label, index) => ({
+          label,
+          value: result.candidateValues?.[index] ?? label,
+        })),
+        ...(result.candidateKind ? { candidateKind: result.candidateKind } : {}),
+        ...(result.storeCode ? { storeCode: result.storeCode } : {}),
       };
       const listed = result.candidates.map((name, index) => `${index + 1}. ${name}`).join('\n');
       this.sessions.toClarifying(userId, draft);
@@ -187,13 +218,19 @@ export class ConversationCore {
 
     // 其余失败都回到空闲态，避免留下能继续推进的半截状态
     this.sessions.toIdle(userId);
-    return { kind: result.reason === 'need-store' || result.reason === 'need-item' ? 'need-info' : 'error', text: result.message + this.modeBanner };
+    return {
+      kind: result.reason === 'need-store' || result.reason === 'need-item' || result.reason === 'need-address'
+        ? 'need-info'
+        : 'error',
+      text: result.message + this.modeBanner,
+    };
   }
 
   private async pick(userId: string, index: number | undefined): Promise<CoreReply> {
     const session = this.sessions.get(userId);
-    const candidates = session.draft?.candidates ?? [];
-    if (candidates.length === 0) {
+    const draft = session.draft;
+    const candidates = draft?.candidates ?? [];
+    if (candidates.length === 0 || !draft?.candidateSnapshotId) {
       return { kind: 'reply', text: '现在没有待选的东西哦。' };
     }
     if (index === undefined || index < 1 || index > candidates.length) {
@@ -201,26 +238,104 @@ export class ConversationCore {
       return { kind: 'clarify', text: `请回复 1~${candidates.length} 之间的序号：\n${listed}` };
     }
 
-    const chosen = candidates[index - 1]?.value;
+    const consumed = this.sessions.consumeCandidate(userId, draft.candidateSnapshotId, index);
+    if (!consumed.ok) return { kind: 'clarify', text: consumed.message };
+
+    const chosen = consumed.candidate.value;
     if (typeof chosen !== 'string') return { kind: 'error', text: '候选项异常，请重新发起。' };
 
-    // 用选中的官方品名重建预览，避免"选了 2 又回去重新猜一次"
-    const rawText = session.draft?.rawText ?? '';
-    const scene = (this.favorites.rules.defaultScene ?? 'pickup') as SceneKey;
+    // Rebuild with the selected provider value; never resolve the same ambiguity again.
+    const rawText = consumed.draft.rawText;
+    const request = await this.resolveBuildRequest(userId, rawText);
+    if (!request.ok) return request.reply;
     const result = await buildPreview({
       gateway: this.gateway,
       favorites: this.favorites,
       rawText: rawText || chosen,
-      scene,
-      pinnedItemName: chosen,
-      ...(session.cart?.store.code ? { pinnedStoreCode: session.cart.store.code } : {}),
+      ...request.request,
+      ...(consumed.draft.candidateKind === 'item' ? { pinnedItemName: chosen } : {}),
+      ...(consumed.draft.candidateKind === 'store'
+        ? { pinnedStoreCode: chosen }
+        : consumed.draft.storeCode
+          ? { pinnedStoreCode: consumed.draft.storeCode }
+          : {}),
     });
 
-    if (!result.ok) return this.fromFailure(userId, result, true);
+    if (!result.ok) return this.fromFailure(userId, result, true, rawText);
 
     const ticket = this.confirmations.issue({ userId, cart: result.preview.cart });
-    this.sessions.toConfirming(userId, result.preview, ticket.token);
+    const transition = this.sessions.toConfirming(userId, result.preview, ticket.token);
+    if (!transition.ok) return { kind: 'error', text: `状态异常：${transition.message}${this.modeBanner}` };
     return { kind: 'preview', text: renderPreview(result.preview, result.notes) + this.modeBanner };
+  }
+
+  private async resolveBuildRequest(
+    userId: string,
+    rawText: string,
+  ): Promise<
+    | { readonly ok: true; readonly request: BuildRequest }
+    | { readonly ok: false; readonly reply: CoreReply }
+  > {
+    const parsed = parseSearchOrder(rawText);
+    if (parsed.kind === 'invalid') {
+      return { ok: false, reply: { kind: 'need-info', text: '这句话暂时无法解析，请补充餐品、门店/地址和取餐方式。' } };
+    }
+    if (parsed.kind === 'legacy') {
+      return { ok: false, reply: { kind: 'need-info', text: '旧编号格式需要先绑定对应的餐品和地点配置，暂未继续检索。' } };
+    }
+
+    // Preserve the original shorthand flow when no explicit mode is present.
+    if (!parsed.mode) {
+      return {
+        ok: true,
+        request: { scene: (this.favorites.rules.defaultScene ?? 'pickup') as SceneKey },
+      };
+    }
+    if (parsed.status !== 'ready' || !parsed.mealQuery) {
+      return { ok: false, reply: { kind: 'need-info', text: describeSearchOrderGap(parsed) } };
+    }
+
+    const scene = parsed.mode === 'dineIn' ? 'pickup' : parsed.mode;
+    const preferredTakeWayCode = parsed.mode === 'dineIn'
+      ? 'eat-in'
+      : parsed.mode === 'pickup'
+        ? 'take-in-store'
+        : undefined;
+
+    if (parsed.mode !== 'delivery') {
+      if (!parsed.storeQuery) {
+        return { ok: false, reply: { kind: 'need-info', text: '请补充要去的门店名称。' } };
+      }
+      return {
+        ok: true,
+        request: {
+          scene,
+          storeQuery: parsed.storeQuery,
+          mealQuery: parsed.mealQuery,
+          ...(parsed.modifierText ? { modifierText: parsed.modifierText } : {}),
+          ...(preferredTakeWayCode ? { preferredTakeWayCode } : {}),
+        },
+      };
+    }
+
+    const reference = parsed.addressReference;
+    if (!reference) return { ok: false, reply: { kind: 'need-info', text: '外卖请先指定已保存的地址，例如「家」或「公司」。' } };
+    if (!this.deliveryAddressResolver) {
+      return { ok: false, reply: { kind: 'need-info', text: '当前没有接入地址簿，请先完成地址绑定后再点外卖。' } };
+    }
+    const resolved = await this.deliveryAddressResolver({ userId, reference });
+    if (!resolved?.addressId) {
+      return { ok: false, reply: { kind: 'need-info', text: `没有找到已确认的「${reference}」地址，请先在地址簿中选择或保存。` } };
+    }
+    return {
+      ok: true,
+      request: {
+        scene: 'delivery',
+        addressId: resolved.addressId,
+        mealQuery: parsed.mealQuery,
+        ...(parsed.modifierText ? { modifierText: parsed.modifierText } : {}),
+      },
+    };
   }
 
   // ── 真正下单的地方 ─────────────────────────────────────────
@@ -239,6 +354,21 @@ export class ConversationCore {
 
     const preview = session.preview;
     const token = session.confirmToken;
+
+    const refreshed = await this.refreshPreviewBeforeConfirmation(preview);
+    if (!refreshed.ok) {
+      return { kind: 'error', text: refreshed.message + this.modeBanner };
+    }
+    if (refreshed.changed) {
+      const ticket = this.confirmations.issue({ userId, cart: refreshed.preview.cart });
+      const transition = this.sessions.toConfirming(userId, refreshed.preview, ticket.token);
+      if (!transition.ok) return { kind: 'error', text: `状态异常：${transition.message}${this.modeBanner}` };
+      return {
+        kind: 'preview',
+        text: '价格或取餐方式有变化，已刷新预览，请重新回复「确认」。\n' +
+          renderPreview(refreshed.preview, ['本次预览已重新拉取实时价格。']) + this.modeBanner,
+      };
+    }
 
     // ① 令牌：一次性、绑定本人与本购物车
     const verified = token
@@ -324,6 +454,46 @@ export class ConversationCore {
     }
   }
 
+  private async refreshPreviewBeforeConfirmation(
+    preview: NonNullable<Session['preview']>,
+  ): Promise<
+    | { readonly ok: true; readonly changed: false; readonly preview: NonNullable<Session['preview']> }
+    | { readonly ok: true; readonly changed: true; readonly preview: NonNullable<Session['preview']> }
+    | { readonly ok: false; readonly message: string }
+  > {
+    let price;
+    try {
+      price = await this.gateway.calculatePrice(preview.cart);
+    } catch {
+      return { ok: false, message: '当前价格暂时无法确认，未继续下单。请稍后重新发起点单。' };
+    }
+    const refreshedTakeWay = preview.cart.takeWayCode
+      ? price.takeWays.find((takeWay) => takeWay.code === preview.cart.takeWayCode)
+      : price.takeWays[0];
+    if (preview.cart.scene !== 'delivery' && !refreshedTakeWay) {
+      return { ok: false, message: '当前取餐方式暂时无法确认，未继续下单。' };
+    }
+    const refreshedCart = refreshedTakeWay
+      ? { ...preview.cart, takeWayCode: refreshedTakeWay.code }
+      : preview.cart;
+    const refreshedPreview = {
+      ...preview,
+      cart: refreshedCart,
+      price,
+      ...(refreshedTakeWay ? { takeWay: refreshedTakeWay } : {}),
+      fingerprint: cartFingerprint(refreshedCart),
+    };
+    const changed =
+      price.originalCents !== preview.price.originalCents ||
+      price.discountCents !== preview.price.discountCents ||
+      price.payableCents !== preview.price.payableCents ||
+      refreshedPreview.takeWay.code !== preview.takeWay.code ||
+      refreshedPreview.fingerprint !== preview.fingerprint;
+    return changed
+      ? { ok: true, changed: true, preview: refreshedPreview }
+      : { ok: true, changed: false, preview };
+  }
+
   // ── 取消 / 只读查询 ────────────────────────────────────────
 
   private cancel(userId: string): CoreReply {
@@ -386,4 +556,13 @@ function isAmbiguousOrderError(error: unknown): boolean {
   if (candidate.ambiguous === true) return true;
   if (candidate.name === 'AbortError' || candidate.name === 'TimeoutError') return true;
   return candidate.code === 'ETIMEDOUT' || candidate.code === 'UND_ERR_CONNECT_TIMEOUT';
+}
+
+function describeSearchOrderGap(input: NamedSearchOrderInput): string {
+  if (input.missingFields.includes('mode')) return '请补充取餐方式，例如「堂食」「自取」「得来速」或「外卖」。';
+  if (input.missingFields.includes('address')) return '外卖请指定已保存地址，例如「家 外卖 巨无霸」。';
+  if (input.missingFields.includes('store')) return '请补充门店名称。';
+  if (input.missingFields.includes('meal')) return '请补充餐品名称。';
+  if (input.unresolvedParts.length > 0) return `这几个词无法安全判断用途：${input.unresolvedParts.join('、')}，请用「餐厅:」或「餐品:」标记。`;
+  return '输入仍有歧义，请补充餐品、门店/地址和取餐方式。';
 }

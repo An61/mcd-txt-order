@@ -17,6 +17,7 @@
  *   留一个 clarifying 态让用户用「1 / 第一个」选，比猜错强。
  */
 
+import { randomUUID } from 'node:crypto';
 import type { Cart, OrderPreview, OrderResult } from './types.ts';
 
 export type SessionState = 'idle' | 'clarifying' | 'confirming' | 'placed';
@@ -27,6 +28,8 @@ export interface ClarifyCandidate<T = unknown> {
   readonly value: T;
 }
 
+export type CandidateKind = 'store' | 'item';
+
 export interface SessionDraft {
   /** 用户原文，用于「重复同一句话＝确认」这种宽容处理 */
   readonly rawText: string;
@@ -36,6 +39,12 @@ export interface SessionDraft {
   readonly storeCode?: string;
   /** 澄清中的候选项 */
   readonly candidates?: readonly ClarifyCandidate[];
+  /** Candidate snapshot identity. It is single-use and scoped to this user session. */
+  readonly candidateSnapshotId?: string;
+  /** Candidate snapshot expiry. Selection after this time is rejected. */
+  readonly candidateExpiresAtMs?: number;
+  /** Which resolution layer owns this candidate list. */
+  readonly candidateKind?: CandidateKind;
   /** 当前正在澄清第几个餐品 */
   readonly clarifyingIndex?: number;
 }
@@ -65,6 +74,24 @@ export type TransitionError =
   | 'missing-preview'
   | 'missing-draft'
   | 'not-found';
+
+export type CandidateSelectionError =
+  | 'not-clarifying'
+  | 'missing-snapshot'
+  | 'candidate-expired'
+  | 'invalid-selection';
+
+export type CandidateSelectionResult =
+  | {
+      readonly ok: true;
+      readonly candidate: ClarifyCandidate;
+      readonly draft: SessionDraft;
+    }
+  | {
+      readonly ok: false;
+      readonly error: CandidateSelectionError;
+      readonly message: string;
+    };
 
 export type TransitionResult =
   | { readonly ok: true; readonly session: Session }
@@ -170,7 +197,58 @@ export class SessionStore {
   toClarifying(userId: string, draft: SessionDraft): TransitionResult {
     const session = this.touch(userId);
     if (!ALLOWED[session.state].includes('clarifying')) return illegal(session.state, 'clarifying');
-    return this.commit(userId, session, 'clarifying', { draft, cart: null, preview: null });
+    const candidateDraft = draft.candidates && draft.candidates.length > 0
+      ? {
+          ...draft,
+          candidateSnapshotId: randomUUID(),
+          candidateExpiresAtMs: this.now() + this.ttlMs,
+        }
+      : draft;
+    return this.commit(userId, session, 'clarifying', { draft: candidateDraft, cart: null, preview: null });
+  }
+
+  /**
+   * Atomically validate and consume one candidate. The snapshot is removed before
+   * any asynchronous gateway work starts, so duplicate or concurrent replies cannot
+   * resolve the same candidate twice.
+   */
+  consumeCandidate(userId: string, snapshotId: string, index: number): CandidateSelectionResult {
+    const existing = this.sessions.get(userId);
+    if (
+      existing?.state === 'clarifying' &&
+      existing.draft?.candidateSnapshotId === snapshotId &&
+      (existing.expiresAtMs <= this.now() ||
+        existing.draft.candidateExpiresAtMs === undefined ||
+        this.now() >= existing.draft.candidateExpiresAtMs)
+    ) {
+      this.reset(userId, existing, '候选列表已过期，请重新发起点单');
+      return { ok: false, error: 'candidate-expired', message: '候选列表已过期，请重新发起点单。' };
+    }
+    const session = this.get(userId);
+    const draft = session.draft;
+    if (session.state !== 'clarifying') {
+      return { ok: false, error: 'not-clarifying', message: '当前没有待选择的候选。' };
+    }
+    if (!draft?.candidateSnapshotId || draft.candidateSnapshotId !== snapshotId) {
+      return { ok: false, error: 'missing-snapshot', message: '候选列表已失效，请重新发起点单。' };
+    }
+    if (draft.candidateExpiresAtMs === undefined || this.now() >= draft.candidateExpiresAtMs) {
+      this.toIdle(userId);
+      return { ok: false, error: 'candidate-expired', message: '候选列表已过期，请重新发起点单。' };
+    }
+    if (!Number.isSafeInteger(index) || index < 1 || index > (draft.candidates?.length ?? 0)) {
+      return { ok: false, error: 'invalid-selection', message: '候选序号无效，请回复列表中的数字。' };
+    }
+    const candidate = draft.candidates?.[index - 1];
+    if (!candidate) return { ok: false, error: 'invalid-selection', message: '候选序号无效，请重新发起点单。' };
+    this.commit(userId, session, 'idle', {
+      draft: null,
+      cart: null,
+      preview: null,
+      confirmToken: null,
+      strongConfirmed: null,
+    });
+    return { ok: true, candidate, draft };
   }
 
   /** 进入待确认态。必须带 preview —— 没有算价结果的预览不允许进入 */

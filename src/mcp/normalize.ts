@@ -477,6 +477,8 @@ export function cartFingerprint(cart: Cart): string {
   const parts: string[] = [
     `scene:${cart.scene}`,
     `store:${cart.store.code}`,
+    `address:${cart.addressId ?? ''}`,
+    `takeWay:${cart.takeWayCode ?? ''}`,
     `resv:${cart.reservationDate ?? ''}`,
   ];
 
