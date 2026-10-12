@@ -36,7 +36,7 @@
 | **M6 发布报名** 🛑 | 公开仓库 + 报名 Issue | T29~T32 | M5 | ⛔ **用户禁令冻结（2026-10-11 09:21）：禁止代报名，直到用户另行通知。** 仓库已 Public ✅、文案与门禁已就绪 ✅，**仅「提交」这一步被冻结**，须由用户本人完成或明确授权 |
 | **M7 冲榜** ✅ | 传播物料 | T33~T35 | M6 | ✅ 已完成（首屏演示图、公众号接入手册、技术要点长文、礼节门禁） |
 | **M8 生产上线** ⛔ | 真能放到公网上跑 | T38~T40 | M4 | ⚠️ 产物与离线检查已完成；被 S9 全面审计整改阻塞，当前不能宣称公网真实下单生产就绪 |
-| **M9 搜索型点餐** ⬜ | 免餐品/门店预置，按名称检索并用地址簿完成外卖 | S10-A1~S10-A7 | M3/M4 + S9 安全基线 | 仅完成设计编排；生产启用仍受 S9、T17 和目标环境 Gate 约束 |
+| **M9 搜索型点餐** 🟨 | 免餐品/门店预置，按名称检索并用地址簿完成外卖 | S10-A1~S10-A7 | M3/M4 + S9 安全基线 | S10-A1 已完成；S10-A2~A7 待实现，生产启用仍受 S9、T17 和目标环境 Gate 约束 |
 
 > ### ⏸️ 报名窗口策略（审计 F-01）——**已被用户禁令覆盖，暂缓执行**
 > 排名依据是 **2026-10-26 00:00 的累计 Star**，仓库报名后可持续更新。
@@ -214,7 +214,7 @@
 | **OWNER** | Main（当前执行线程）；用户负责真实账号、公网部署和外部服务验收 |
 | **SOURCE_ANCHOR** | `TASKS.md §S9` |
 | **FORBIDDEN_PATHS / SIDE EFFECTS** | 未经单独授权不得调用真实 `create-order`、发送微信公网消息、轮换/撤销外部凭据、发布生产、修改全局 Hook 或创建第二任务台账。 |
-| **UPDATED_AT** | 2026-10-11（Asia/Shanghai） |
+| **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### 整改任务
 
@@ -227,12 +227,12 @@
 | **S9-A5** | ✅ | P1 | **MCP 传输安全。** 启动时解析 `MCD_MCP_URL`；默认只允许 HTTPS，HTTP 仅允许显式 opt-in 的本机回环代理；拒绝任意公网 HTTP 地址，并在启动日志中只显示脱敏 endpoint。 | T1/T2/T14 | `src/mcp/client.ts`、`src/mcp/gateway.ts`、`.env.example` | `https://` 正常；公网 `http://` 启动即失败；仅允许显式配置的 `127.0.0.1`/`[::1]` IP 字面量代理，`localhost` 也会拒绝；Token 不出现在错误、日志或 URL。 |
 | **S9-A6** | ✅ | P1 | **类型检查、CI 与回归门禁。** 安装并锁定 TypeScript 类型检查依赖，增加 Node 22 的 CI；保留现有自检，同时执行 `tsc --noEmit`、语法检查、release scan 和部署配置校验。 | T38/T39/T40 | `package.json`、`package-lock.json` 或等价锁文件、`.github/workflows/`、`tsconfig.json` | 干净 checkout 可重复运行；类型检查、`npm run check`、`npm run check:release` 全部通过；CI 不读取真实 `.env`，不调用真实写接口。 |
 | **S9-A7** | 🟨 | P1 | **部署与故障演练。** 对 Dockerfile、Compose、Caddy、Nginx、systemd 做配置检查和最小启动验证。 | S9-A1/A3/A5/A6 | deploy/、docs/WECHAT_PRODUCTION.md | Compose 语法、镜像构建、Node 容器启动、`/healthz`、非 root UID 和容器重启回归已通过；Nginx `nginx -t` 与 systemd `systemd-analyze verify` 已于 2026-10-11 用官方镜像/官方工具通过；**带真实证书与域名的目标机启动、滚动替换和回滚仍需隔离部署环境**。 |
-| **S9-A8** | 🟨 | P2 | **文档与历史卫生。** 修正 parseOrderResult 过时注释，保留 secret scan，复核外部报名回执。 | T29/T30/T31/T32 | src/mcp/normalize.ts、scripts/check-release.ts、TASKS.md、GitHub Issue #361 | 注释已修正；当前树无真实凭据；release scan 24/24 通过。Issue #361 已回读并确认官方拒绝；仓库已 Public。**「复核回执」仅限只读读取评论，不提交、不催办**（用户禁令 2026-10-11 冻结提交动作）。 |
+| **S9-A8** | ✅ | P2 | **文档与历史卫生。** 修正 parseOrderResult 过时注释，保留 secret scan，复核外部报名回执。 | T29/T30/T31/T32 | src/mcp/normalize.ts、scripts/check-release.ts、TASKS.md、GitHub Issue #361 | ✅ 注释已修正；当前树无真实凭据；release scan 24/24 通过；Issue #361 已只读回读并确认官方拒绝，仓库已 Public。未提交新 Issue，符合当前只读/冻结边界。 |
 
 ### 已实施边界与剩余验收
 
 - **已实施**：真实模式使用 SQLite 持久化订单尝试状态；同一持久文件支持跨进程原子 claim，超时/连接中断进入 `unknown`；支付链接、MCP URL、HTTP body、请求超时、应用限流和错误脱敏均有代码与本地脚本证据。
-- **已验证**：`npm run typecheck`、`npm run check:deploy`（14/14）、`npm run check:s9:a1`、`npm run check:s9:boundaries`；当前无 Token 离线 `npm run check` 为 **331 项通过 / 0 失败 / 0 跳过**（M1 60、M2 83、M3 27、M4 74、M8 49、报名文案 14、release 24）。此前带 Token 的只读链路另有 340 项通过记录，M3 为 36 项（含真实只读链路）。
+- **已验证**：`npm run typecheck`、`npm run check:deploy`（14/14）、`npm run check:s9:a1`、`npm run check:s9:boundaries`；当前无 Token 离线 `npm run check` 为 **332 项通过 / 0 失败 / 0 跳过**（原门禁 331 + S10-A1 1）。此前带 Token 的只读链路另有 340 项通过记录，M3 为 36 项（含真实只读链路）。
 - **独立复审**：定向复审通过，确认 `parseOrderResult` 异常进入 `unknown` 分支、异常下单文案不再错误声称“没有扣款”；未发现新的 P0/P1。
 - **仍需用户环境**：Caddy/Nginx/systemd **在目标机上带真实证书与域名的启动**、两实例共享持久卷的滚动替换、真实微信账号和真实 `create-order` 验收；这些未获授权前不解除 M8 生产阻塞。（注：Nginx 与 systemd 的配置级验证已于 2026-10-11 在本机用官方镜像取得，见下条，剩余的是带真实证书/域名的运行时验收。）
 - **Nginx 语法证据（2026-10-11 补齐）**：本机 Docker Desktop 可用，拉取 `nginx:1.27-alpine`（digest `sha256:65645c7bb6a0…`），容器内 `apk add openssl` 生成占位证书后执行 `nginx -t`：
@@ -247,7 +247,7 @@
 - **容器级幂等证据**：两个独立 Node 容器共享同一临时 SQLite 卷，对同一用户和购物车指纹分别 claim，结果为 `true/false`；测试卷和容器已清理。
 - **Provider schema 证据**：已查阅官方 Create Order 文档；公开入参列出 `storeCode`、`beCode`、`addressId`、`takeWayCode`、`beType`、`reservationDate`、`gmServiceCode`、`items`，未列出幂等键或请求去重契约，因此不能臆造字段接入。
 - **反代配置证据**：官方 `caddy:2-alpine` 对 `deploy/Caddyfile` 执行 `caddy validate` 通过；Nginx `nginx -t` 已在官方 `nginx:1.27-alpine` 容器内通过。仍需目标机使用真实证书与域名完成启动、切换和回滚验收。
-- **外部回执**：已回读 [活动 Issue #361](https://github.com/M-China/mcd-developer-innovation-challenge/issues/361)：官方评论为“未通过审核”，原因是审核时项目无法访问；当前项目仓库已确认 Public。重新提交尝试收到 GitHub API `403 Resource not accessible by integration`，未创建新 Issue，保持 `S9-A8 🟨`。
+- **外部回执**：已回读 [活动 Issue #361](https://github.com/M-China/mcd-developer-innovation-challenge/issues/361)：官方评论为“未通过审核”，原因是审核时项目无法访问；当前项目仓库已确认 Public。重新提交尝试收到 GitHub API `403 Resource not accessible by integration`，未创建新 Issue；A8 的只读复核与历史卫生验收已完成，报名重提仍需用户手动操作或具备写权限的 PAT。
 
 #### A1 订单幂等边界
 
@@ -365,9 +365,9 @@
 |---|---|
 | `npm run doctor` | ✅ 连上 `https://mcp.mcd.cn/`，服务端提供 35 个工具；Token 已配置 |
 | `npm run check`（有 Token 历史快照） | ✅ **340 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 报名 14 + 礼节 24）。上次那 1 项跳过是时段缺货，该次运行已恢复为 0 |
-| `npm run check`（当前无 Token 离线复核） | ✅ **331 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 27 + M4 74 + M8 49 + 报名 14 + 礼节 24） |
+| `npm run check`（当前无 Token 离线复核） | ✅ **332 通过 / 0 失败 / 0 跳过**（原门禁 331 + S10-A1 1） |
 | `npm run typecheck` | ✅ 通过 |
-| CI | ✅ Node 22 CI 记录通过；S9 脱敏提交 `c74c141` 与 `origin/master` 一致，当前仅有 `TASKS.md` 的 S10 编排未提交 |
+| CI | ✅ Node 22 CI 记录通过；当前本地 HEAD=`db024de`，工作树 clean；`origin/master` 仍为 `c74c141`，S10-A1 本地提交尚未推送 |
 | 真实链路（预览后取消） | ✅ 门店→菜单→匹配→详情→算价→预览全通，实测门店信息已脱敏 / 猪柳蛋麦满分 ×1 ¥18.00 / 堂食 |
 
 **主链路 6 步：前 5 步真实或自检覆盖 ✅，第 6 步 `create-order` 🟡 未验证（T17，会真花钱，需本人授权）。**
@@ -408,10 +408,10 @@
 | **VERIFICATION** | 新增离线 S10 门禁；并通过 `npm run typecheck`、`npm run check`、`npm run check:release`、`npm run check:s9:boundaries`；真实写接口和公网运行证据保持未验证 |
 | **REVIEW_REQUIRED** | 需要一次独立代码复核，重点覆盖解析歧义、用户隔离、地址默认值、候选会话和确认令牌绑定 |
 | **REPAIR_STATE** | attempt=1；score=2（P1 边界修复）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION |
-| **S10-A1_EVIDENCE** | commit=`57e5c43`；`npm run check:s10:a1` PASS；`npm run typecheck` PASS；全量 `npm run check`、`check:release`、`check:s9:boundaries` PASS；独立复核 PASS；证据上限为本地离线静态与自检，不代表真实 MCP/生产验收 |
+| **S10-A1_EVIDENCE** | commit=`db024de`；`npm run check:s10:a1` PASS；`npm run typecheck` PASS；全量 `npm run check`、`check:release`、`check:s9:boundaries` PASS；独立复核 PASS；证据上限为本地离线静态与自检，不代表真实 MCP/生产验收 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
-| **UPDATED_AT** | 2026-10-11（Asia/Shanghai） |
+| **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### S10 子任务编排
 
