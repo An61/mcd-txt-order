@@ -412,13 +412,14 @@
 | **REVIEW_REQUIRED** | 需要一次独立代码复核，重点覆盖解析歧义、用户隔离、地址默认值、候选会话和确认令牌绑定 |
 | **REPAIR_STATE** | attempt=1；score=2（P1 边界修复）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION |
 | **S10-A1_EVIDENCE** | commit=`db024de`；`npm run check:s10:a1` PASS；`npm run typecheck` PASS；全量 `npm run check`、`check:release`、`check:s9:boundaries` PASS；独立复核 PASS；证据上限为本地离线静态与自检，不代表真实 MCP/生产验收 |
-| **S10-A2_EVIDENCE** | base/HEAD=`32a235cdb680ba98d599c0089f0f8389b729a99a` + 归属明确的集成路径；2026-10-12 `check:s10:a2`、`typecheck`、全量 `check`（333 项）、`check:release`、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；中文门牌与嵌套 envelope 回归断言 PASS；独立复核与定向 re-review PASS；无真实 MCP 写调用或真实部署；证据上限为本地离线/静态/合成 |
+| **S10-A2_EVIDENCE** | commit=`b40b84f`（本地）；base=`32a235cdb680ba98d599c0089f0f8389b729a99a`；2026-10-12 `check:s10:a2`、`typecheck`、全量 `check`（333 项）、`check:release`、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；中文门牌与嵌套 envelope 回归断言 PASS；独立复核与定向 re-review PASS；无真实 MCP 写调用或真实部署；证据上限为本地离线/静态/合成 |
 | **S10-A2_REVIEW_STATE** | `/root/mcd_search_s10_review_a02_a01` requested=GPT-6 Luna/high，首次与唯一重试均为容量 ROUTE_FAILURE；successor=`/root/mcd_search_s10_review_a02_a02` requested=GPT-6.1 Sol/medium，首次容量 ROUTE_FAILURE，唯一重试后完成独立复核与定向 re-review PASS；effective model/reasoning=UNVERIFIED；context=fresh；证据上限保持本地离线/静态/合成 |
 | **S10-A2_REVIEW_FINDINGS** | Reviewer=`/root/mcd_search_s10_review_a02_a02`；初审 P1 `src/domain/addressBook.ts:107-110` 中文门牌可能将完整地址放入候选 label、P2 `src/mcp/gateway.ts:148-153` 未解嵌套 `data.data` 已修复；定向 re-review PASS；`docs/PROGRESS.md` 已归属 Main；无新的 P0/P1/P2；证据上限为本地静态/合成 |
 | **S10-A2_REPAIR_STATE** | attempt=1；score=3（P1×1 + P2×1）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION；repair Worker=`/root/mcd_search_s10_exec_a02_a02`；owned paths=`src/domain/addressBook.ts`, `src/mcp/gateway.ts`；independent re-review PASS |
 | **S10-A2_PENDING_BOUNDARIES** | A2 验收条件已满足；下一步为 A3 会话与候选选择。生产启用仍受 S9-A4/A7、T17、真实微信与目标机 Gate 约束；本轮不做真实部署 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
+| **CLEAN_RECONCILIATION** | Main original worktree=`CLEAN` after local integration commit; candidate `s10-a2-mcd-txt-order` retained as recovery snapshot at base `32a235c` until explicit cleanup; origin/master remains `c74c141`; no push |
 | **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### S10 子任务编排
