@@ -26,7 +26,7 @@
 | 部署配置门禁 | `npm run check:deploy` | ✅ **14 项通过 / 0 失败** |
 | 隔离双实例部署演练 | Docker Desktop 临时 Compose | ✅ `--scale=2`、Caddy 内部 TLS、`/healthz=200`、调试入口 404、共享 SQLite claim `true/false`、重启后重复 claim `false`、滚动替换与回滚均通过；仅证明订单 claim 共享状态，不证明会话/ticket 跨实例；不等同于目标机真实证书/域名验收 |
 | CI（历史记录） | `.github/workflows/ci.yml` | ✅ Node 22.22.2 的既有 CI 记录通过 |
-| 本地 / 远端同步 | `git status -sb` | 本地 HEAD=`792b7af`（含 S10-A2 实现与验收文档），`origin/master`=`c74c141`；工作树 clean；尚未推送 |
+| 本地 / 远端同步 | `git status -sb` | 本地 HEAD=`d8d85d1`（含 S10-A2 实现与验收文档），`origin/master`=`c74c141`；工作树 clean；尚未推送 |
 
 当前无 Token 离线自检 333 项构成：原门禁 331 · S10-A1 输入契约 1 · S10-A2 地址簿检查 1。两个 S10 数字均为检查脚本的汇总结果，不代表各自只有一个断言，也不代表独立复核或生产验收。原门禁包括 M1 内核 60 · M2 安全与会话 83 · M3 下单编排 27 · M4 渠道 74 · M8 生产上线 49 · 报名文案 14 · 推送前礼节 24。此前带 Token 的只读历史快照为 340 项，其中 M3 为 36 项。
 
