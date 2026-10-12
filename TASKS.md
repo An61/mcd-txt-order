@@ -36,7 +36,7 @@
 | **M6 发布报名** 🛑 | 公开仓库 + 报名 Issue | T29~T32 | M5 | ⛔ **用户禁令冻结（2026-10-11 09:21）：禁止代报名，直到用户另行通知。** 仓库已 Public ✅、文案与门禁已就绪 ✅，**仅「提交」这一步被冻结**，须由用户本人完成或明确授权 |
 | **M7 冲榜** ✅ | 传播物料 | T33~T35 | M6 | ✅ 已完成（首屏演示图、公众号接入手册、技术要点长文、礼节门禁） |
 | **M8 生产上线** ⛔ | 真能放到公网上跑 | T38~T40 | M4 | ⚠️ 产物与离线检查已完成；被 S9 全面审计整改阻塞，当前不能宣称公网真实下单生产就绪 |
-| **M9 搜索型点餐** 🟨 | 免餐品/门店预置，按名称检索并用地址簿完成外卖 | S10-A1~S10-A7 | M3/M4 + S9 安全基线 | S10-A1 已完成；S10-A2~A7 待实现，生产启用仍受 S9、T17 和目标环境 Gate 约束 |
+| **M9 搜索型点餐** 🟨 | 免餐品/门店预置，按名称检索并用地址簿完成外卖 | S10-A1~S10-A7 | M3/M4 + S9 安全基线 | S10-A1、S10-A2 已完成；S10-A3~A7 待实现，生产启用仍受 S9、T17 和目标环境 Gate 约束 |
 
 > ### ⏸️ 报名窗口策略（审计 F-01）——**已被用户禁令覆盖，暂缓执行**
 > 排名依据是 **2026-10-26 00:00 的累计 Star**，仓库报名后可持续更新。
@@ -232,7 +232,7 @@
 ### 已实施边界与剩余验收
 
 - **已实施**：真实模式使用 SQLite 持久化订单尝试状态；同一持久文件支持跨进程原子 claim，超时/连接中断进入 `unknown`；支付链接、MCP URL、HTTP body、请求超时、应用限流和错误脱敏均有代码与本地脚本证据。
-- **已验证**：`npm run typecheck`、`npm run check:deploy`（14/14）、`npm run check:s9:a1`、`npm run check:s9:boundaries`；当前无 Token 离线 `npm run check` 为 **332 项通过 / 0 失败 / 0 跳过**（原门禁 331 + S10-A1 1）。此前带 Token 的只读链路另有 340 项通过记录，M3 为 36 项（含真实只读链路）。
+- **已验证**：`npm run typecheck`、`npm run check:deploy`（14/14）、`npm run check:s9:a1`、`npm run check:s9:boundaries`；当前无 Token 离线 `npm run check` 为 **333 项通过 / 0 失败 / 0 跳过**（原门禁 331 + S10-A1 1 + S10-A2 1）。此前带 Token 的只读链路另有 340 项通过记录，M3 为 36 项（含真实只读链路）。
 - **独立复审**：定向复审通过，确认 `parseOrderResult` 异常进入 `unknown` 分支、异常下单文案不再错误声称“没有扣款”；未发现新的 P0/P1。
 - **仍需用户环境**：Caddy/Nginx/systemd **在目标机上带真实证书与域名的启动**、两实例共享持久卷的滚动替换、真实微信账号和真实 `create-order` 验收；这些未获授权前不解除 M8 生产阻塞。（注：Nginx 与 systemd 的配置级验证已于 2026-10-11 在本机用官方镜像取得，见下条，剩余的是带真实证书/域名的运行时验收。）
 - **Nginx 语法证据（2026-10-11 补齐）**：本机 Docker Desktop 可用，拉取 `nginx:1.27-alpine`（digest `sha256:65645c7bb6a0…`），容器内 `apk add openssl` 生成占位证书后执行 `nginx -t`：
@@ -365,7 +365,7 @@
 |---|---|
 | `npm run doctor` | ✅ 连上 `https://mcp.mcd.cn/`，服务端提供 35 个工具；Token 已配置 |
 | `npm run check`（有 Token 历史快照） | ✅ **340 通过 / 0 失败 / 0 跳过**（M1 60 + M2 83 + M3 36 + M4 74 + M8 49 + 报名 14 + 礼节 24）。上次那 1 项跳过是时段缺货，该次运行已恢复为 0 |
-| `npm run check`（当前无 Token 离线复核） | ✅ **332 通过 / 0 失败 / 0 跳过**（原门禁 331 + S10-A1 1） |
+| `npm run check`（当前无 Token 离线复核） | ✅ **333 通过 / 0 失败 / 0 跳过**（原门禁 331 + S10-A1 1 + S10-A2 1） |
 | `npm run typecheck` | ✅ 通过 |
 | CI | ✅ Node 22 CI 记录通过；当前本地 HEAD=`db024de`，工作树 clean；`origin/master` 仍为 `c74c141`，S10-A1 本地提交尚未推送 |
 | 真实链路（预览后取消） | ✅ 门店→菜单→匹配→详情→算价→预览全通，实测门店信息已脱敏 / 猪柳蛋麦满分 ×1 ¥18.00 / 堂食 |
@@ -382,9 +382,9 @@
 
 ## S10 搜索型点餐与外卖地址簿（2026-10-11）
 
-> **状态：🟨 IN_PROGRESS（S10-A1 输入契约与领域模型）**
+> **状态：🟨 IN_PROGRESS（S10-A1、S10-A2 已完成；S10-A3~A7 待执行）**
 >
-> 产品决策：不要求用户预置餐品或餐厅；用户直接发送餐品名、餐厅名和取餐方式，系统实时检索并在歧义时让用户选择。外卖地址允许保存多个，并支持默认地址。MVP 采用“文本地址 → MCP 地址检索 → 数字确认 → 保存 `addressId`”方案，不引入原生地址选择页面。
+> 产品决策：不要求用户预置餐品或餐厅；用户直接发送餐品名、餐厅名和取餐方式，系统实时检索并在歧义时让用户选择。外卖地址允许保存多个，并支持默认地址。MVP 采用“查询 MCP 已有地址列表 → 本地按地址词筛选 → 数字确认 → 保存 `addressId` 与别名”方案，不引入原生地址选择页面。官方 `delivery-query-addresses` 无入参；不存在自由文本远端地址搜索契约，不能臆造参数。首次创建官方配送地址暂由用户在官方渠道完成。
 
 ### 任务卡
 
@@ -400,15 +400,23 @@
 | **PRIORITY** | P1（体验主线）；资金安全继续按 P0 处理 |
 | **DEPENDENCIES** | T14~T19、T21~T23、T37；依赖 S9-A1/A2/A4/A6 的已验证安全基线 |
 | **OWNER** | Main（当前执行线程）；实现阶段可按下方任务卡分派，但共享 `TASKS.md` 由 Main 串行维护 |
-| **ACTIVE_BINDING** | owner=Main；branch=`master`；worktree=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；base=`f6a2ae888ee2db32989a055a02529c83f3da195e`；write-scope=`src/domain/`, `scripts/check-s10-a1.ts`, `package.json`, `SPEC.md`, `TASKS.md` |
+| **ACTIVE_BINDING** | owner=Main（A2 集成/复核修复）；branch=`master`；worktree=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；base=`32a235cdb680ba98d599c0089f0f8389b729a99a`；write-scope=候选四路径集成、`TASKS.md`、`SPEC.md`、`docs/PROGRESS.md`、`package.json`；修复 Worker 仅拥有 `src/domain/addressBook.ts` 与 `src/mcp/gateway.ts` |
+| **OWNER_RELEASE_RECEIPT** | released=`/root/mcd_search_s10_exec_a02_a01`（原实现）；released=`/root/mcd_search_s10_exec_a02_a02`（P1/P2 修复）；scope=`src/domain/addressBook.ts`, `src/safety/addressBookStore.ts`, `src/mcp/gateway.ts`, `scripts/check-s10-a2.ts`；revision=dirty on base `32a235c`; timestamp=2026-10-12；reason=worker final returned, no active writer |
+| **DISPOSITION / RECOVERY_REF** | disposition=`ACCEPTED_PENDING_LOCAL_COMMIT`；candidate=`C:\Users\安\WorkBuddy\Worktrees\McDonald\s10-a2-mcd-txt-order`；recovery_ref=`32a235c` + attributable dirty paths；Main-owned `docs/PROGRESS.md` explicitly attributed |
+| **ADMISSION_INVENTORY_RECEIPT** | repository=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；bindings=Main(master, 控制文档/脚本接入), A2 Worker(codex/s10-address-book, 地址簿源码/专用检查), A2 repair Worker(新鲜候选，仅 `src/domain/addressBook.ts`/`src/mcp/gateway.ts`)；worktrees=上述 original + candidate，两者 base/HEAD=`32a235c`；Main 新增归属 `docs/PROGRESS.md`；shared-resources=忽略的旧 `.cache`/凭据/数据库禁止访问，验证使用独立临时数据库；inventory=COMPLETE；unknown=runtime model/reasoning 无字段回执，UNVERIFIED；timestamp=2026-10-12 |
 | **SOURCE_ANCHOR** | `TASKS.md §S10` |
 | **OWNED_PATHS / RESOURCES** | `src/domain/`、`src/channel/core.ts`、`src/mcp/`、`src/safety/`、`config/`、`fixtures/`、`scripts/`、`docs/` |
-| **FORBIDDEN_PATHS / SIDE EFFECTS** | 不调用真实 `create-order`；不发送公网微信消息；不发布生产；不轮换外部凭据；不把真实地址、Token、支付链接写入源码、夹具或日志 |
+| **FORBIDDEN_PATHS / SIDE EFFECTS** | 不调用真实 `create-order`；不发送公网微信消息；不做真实部署（用户 2026-10-12 明确）；不轮换外部凭据；不把真实地址、Token、支付链接写入源码、夹具或日志 |
 | **ACCEPTANCE_CRITERIA** | 见 S10-A1~S10-A7；名称顺序可变化但实体必须来自检索或用户已确认结果；歧义未解决时不得下单；外卖无有效地址时不得进入算价 |
 | **VERIFICATION** | 新增离线 S10 门禁；并通过 `npm run typecheck`、`npm run check`、`npm run check:release`、`npm run check:s9:boundaries`；真实写接口和公网运行证据保持未验证 |
 | **REVIEW_REQUIRED** | 需要一次独立代码复核，重点覆盖解析歧义、用户隔离、地址默认值、候选会话和确认令牌绑定 |
 | **REPAIR_STATE** | attempt=1；score=2（P1 边界修复）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION |
 | **S10-A1_EVIDENCE** | commit=`db024de`；`npm run check:s10:a1` PASS；`npm run typecheck` PASS；全量 `npm run check`、`check:release`、`check:s9:boundaries` PASS；独立复核 PASS；证据上限为本地离线静态与自检，不代表真实 MCP/生产验收 |
+| **S10-A2_EVIDENCE** | base/HEAD=`32a235cdb680ba98d599c0089f0f8389b729a99a` + 归属明确的集成路径；2026-10-12 `check:s10:a2`、`typecheck`、全量 `check`（333 项）、`check:release`、`check:s9:boundaries`、`check:deploy`（14 项）、`git diff --check` PASS；中文门牌与嵌套 envelope 回归断言 PASS；独立复核与定向 re-review PASS；无真实 MCP 写调用或真实部署；证据上限为本地离线/静态/合成 |
+| **S10-A2_REVIEW_STATE** | `/root/mcd_search_s10_review_a02_a01` requested=GPT-6 Luna/high，首次与唯一重试均为容量 ROUTE_FAILURE；successor=`/root/mcd_search_s10_review_a02_a02` requested=GPT-6.1 Sol/medium，首次容量 ROUTE_FAILURE，唯一重试后完成独立复核与定向 re-review PASS；effective model/reasoning=UNVERIFIED；context=fresh；证据上限保持本地离线/静态/合成 |
+| **S10-A2_REVIEW_FINDINGS** | Reviewer=`/root/mcd_search_s10_review_a02_a02`；初审 P1 `src/domain/addressBook.ts:107-110` 中文门牌可能将完整地址放入候选 label、P2 `src/mcp/gateway.ts:148-153` 未解嵌套 `data.data` 已修复；定向 re-review PASS；`docs/PROGRESS.md` 已归属 Main；无新的 P0/P1/P2；证据上限为本地静态/合成 |
+| **S10-A2_REPAIR_STATE** | attempt=1；score=3（P1×1 + P2×1）；repeat_fp=0；evidence_delta=1；route=GPT-6 Luna/high；escalation=no；implementation_phase=MECHANICAL_IMPLEMENTATION；repair Worker=`/root/mcd_search_s10_exec_a02_a02`；owned paths=`src/domain/addressBook.ts`, `src/mcp/gateway.ts`；independent re-review PASS |
+| **S10-A2_PENDING_BOUNDARIES** | A2 验收条件已满足；下一步为 A3 会话与候选选择。生产启用仍受 S9-A4/A7、T17、真实微信与目标机 Gate 约束；本轮不做真实部署 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
 | **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
@@ -418,7 +426,7 @@
 | ID | 状态 | 优先级 | 任务与解决方案 | 依赖 | 主要路径 | 验收标准 |
 |---|---|---:|---|---|---|---|
 | **S10-A1** | ✅ | P0 | **输入契约与领域模型。** 定义餐品查询词、餐厅查询词、取餐方式、特制项、地址引用和候选选择的统一模型；支持 `餐品 餐厅 堂食`、`餐厅 堂食 餐品` 等顺序变化。 | — | `src/domain/`、`SPEC.md` | 明确解析结果、缺失字段和歧义状态；不把任意自然语言直接当成可下单参数；既有编号输入可保留为兼容格式。 |
-| **S10-A2** | ⬜ | P0 | **外卖地址簿。** 支持添加、列出、设默认、删除地址；通过 `delivery-query-addresses` 检索候选，用户数字确认后保存服务端 `addressId`。 | S10-A1 | `src/domain/`、`src/mcp/`、`src/safety/`、`config/` | 每个用户地址隔离；最多一个默认地址；无默认地址且未指定地址时安全阻断外卖；保存记录不包含未脱敏原始凭证或公开地址样例。 |
+| **S10-A2** | ✅ | P0 | **外卖地址簿。** 支持添加引用、列出、设默认、删除地址；通过 `delivery-query-addresses` 读取账号已有地址并在本地筛选候选，用户数字确认后保存服务端 `addressId`。不存在地址时提示官方渠道添加，远端新增地址另需明确写确认。 | S10-A1 | `src/domain/`、`src/mcp/`、`src/safety/`、`config/` | 每个用户与 provider 账号隔离；最多一个默认地址；无默认地址且未指定地址时安全阻断外卖；保存记录不含原始详细地址、联系人、手机号、凭据。 |
 | **S10-A3** | ⬜ | P0 | **会话与候选选择。** 建立“待选餐厅 → 待选餐品 → 待确认”的状态流；数字回复绑定用户、候选快照和 TTL，过期或越权选择失效。 | S10-A1、S10-A2 | `src/channel/core.ts`、`src/domain/session.ts`、`src/safety/` | 多候选时按顺序逐层选择；非法数字、重复选择、过期选择不会触发 MCP 写接口；跨用户不能读取或确认他人的候选。 |
 | **S10-A4** | ⬜ | P0 | **实时检索与模式兼容。** 到店模式先检索餐厅再读菜单；外卖先确定地址再检索可配送餐厅；餐品只在选定餐厅的实时菜单中匹配；取餐方式使用算价返回值。 | S10-A1~A3 | `src/domain/orderFlow.ts`、`src/mcp/gateway.ts`、`src/mcp/normalize.ts` | 支持堂食、自取、得来速、外卖；不支持的模式、失效餐品、闭店或地址不配送均返回固定人话；不猜测门店或 `takeWayCode`。 |
 | **S10-A5** | ⬜ | P0 | **预览、确认与支付回传。** 选项确定后重新拉菜单和算价，生成绑定购物车/地址/取餐方式的预览；用户明确确认后才进入 `create-order`，成功后只返回经过白名单校验的支付链接。 | S10-A3、S10-A4、S9-A1/A2/A4 | `src/channel/core.ts`、`src/safety/`、`src/mcp/normalize.ts` | 价格变化会要求重新确认；确认令牌一次性、短 TTL、绑定用户与订单指纹；失败进入保守终态，不自动重试；支付 URL 不泄露到错误文案。 |

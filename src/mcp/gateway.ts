@@ -44,6 +44,7 @@ import {
   type OrderResult,
   type PriceBreakdown,
 } from '../domain/types.ts';
+import { normalizeProviderAddressForQuery, type AddressBinding, type ProviderAddress } from '../domain/addressBook.ts';
 
 // ─────────────────────────────────────────────────────────────
 // 接口
@@ -55,6 +56,8 @@ export interface StoreQuery {
   readonly city?: string;
   /** 门店关键词（别名解析后的官方名称优先） */
   readonly keyword?: string;
+  /** Delivery address id returned by delivery-query-addresses. Never read from process.env. */
+  readonly addressId?: string;
 }
 
 export interface MenuQuery {
@@ -87,6 +90,7 @@ export interface DataGateway {
   createOrder(input: CreateOrderInput): Promise<OrderResult>;
   /** **写操作**：取消订单 */
   cancelOrder(orderId: string, reasonCode: string): Promise<boolean>;
+  listDeliveryAddresses(): Promise<ProviderAddress[]>;
 }
 
 export class GatewayError extends Error {
@@ -128,24 +132,48 @@ function sceneExtras(sceneKey: SceneKey, store: Store): Record<string, unknown> 
 
 export class RealGateway implements DataGateway {
   readonly mode = 'real' as const;
+  readonly addressBinding?: AddressBinding;
 
   private readonly client: McpStreamableHttpClient;
 
-  constructor(client?: McpStreamableHttpClient) {
+  constructor(client?: McpStreamableHttpClient, addressBinding?: AddressBinding) {
     this.client = client ?? new McpStreamableHttpClient();
+    this.addressBinding = addressBinding;
   }
 
   describe(): string {
     return '真实模式：正在调用麦当劳官方 MCP';
   }
 
+  async listDeliveryAddresses(): Promise<ProviderAddress[]> {
+    const payload = await this.call('delivery-query-addresses', {});
+    const view = readEnvelope(payload);
+    const data = view.data;
+    const body = data && typeof data === 'object' && !Array.isArray(data)
+      ? data as Record<string, unknown>
+      : undefined;
+    const value = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : undefined;
+    const rows = Array.isArray(data)
+      ? data
+      : Array.isArray(body?.data)
+        ? body.data
+        : Array.isArray(body?.addresses)
+          ? body.addresses
+          : Array.isArray(value?.addresses)
+            ? value.addresses
+            : [];
+    return rows.map(normalizeProviderAddressForQuery);
+  }
+
   async listStores(query: StoreQuery): Promise<Store[]> {
     const scene = getScene(query.scene);
     // 第三条路径：麦乐送/团餐走配送地址体系，与到店完全不同
     if (scene.storeTool === 'delivery-query-stores') {
-      const addressId = process.env.MCD_ADDRESS_ID;
+      const addressId = query.addressId?.trim();
       if (!addressId) {
-        throw new GatewayError('外送场景需要先设置 MCD_ADDRESS_ID（配送地址 ID）');
+        throw new GatewayError('外送场景需要先完成地址查询并提供 addressId。');
       }
       const payload = await this.call('delivery-query-stores', {
         beType: scene.beType,
@@ -303,11 +331,20 @@ export class RealGateway implements DataGateway {
 
 export class SampleGateway implements DataGateway {
   readonly mode = 'sample' as const;
+  readonly addressBinding?: AddressBinding;
 
   private placedOrderId: string | undefined;
 
+  constructor(addressBinding?: AddressBinding) {
+    this.addressBinding = addressBinding;
+  }
+
   describe(): string {
     return '⚠️ 演示模式：使用离线快照数据，**不会真的下单**';
+  }
+
+  async listDeliveryAddresses(): Promise<ProviderAddress[]> {
+    return [normalizeProviderAddressForQuery({ addressId: 'sample-address-1', contactName: '示例用户', phone: 'phone-a', fullAddress: '示例市示例区示例路1号' })];
   }
 
   async listStores(query: StoreQuery): Promise<Store[]> {
