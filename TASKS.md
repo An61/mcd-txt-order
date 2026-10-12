@@ -402,7 +402,7 @@
 | **OWNER** | Main（当前执行线程）；实现阶段可按下方任务卡分派，但共享 `TASKS.md` 由 Main 串行维护 |
 | **ACTIVE_BINDING** | owner=Main（A2 集成/复核修复）；branch=`master`；worktree=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；base=`32a235cdb680ba98d599c0089f0f8389b729a99a`；write-scope=候选四路径集成、`TASKS.md`、`SPEC.md`、`docs/PROGRESS.md`、`package.json`；修复 Worker 仅拥有 `src/domain/addressBook.ts` 与 `src/mcp/gateway.ts` |
 | **OWNER_RELEASE_RECEIPT** | released=`/root/mcd_search_s10_exec_a02_a01`（原实现）；released=`/root/mcd_search_s10_exec_a02_a02`（P1/P2 修复）；scope=`src/domain/addressBook.ts`, `src/safety/addressBookStore.ts`, `src/mcp/gateway.ts`, `scripts/check-s10-a2.ts`；revision=dirty on base `32a235c`; timestamp=2026-10-12；reason=worker final returned, no active writer |
-| **DISPOSITION / RECOVERY_REF** | disposition=`ACCEPTED_PENDING_LOCAL_COMMIT`；candidate=`C:\Users\安\WorkBuddy\Worktrees\McDonald\s10-a2-mcd-txt-order`；recovery_ref=`32a235c` + attributable dirty paths；Main-owned `docs/PROGRESS.md` explicitly attributed |
+| **DISPOSITION / RECOVERY_REF** | disposition=`INTEGRATED`；local commits=`b40b84f`, `792b7af`, `5efd535`；candidate=`C:\Users\安\WorkBuddy\Worktrees\McDonald\s10-a2-mcd-txt-order` retained；recovery_ref=`32a235c` + attributable dirty paths；Main-owned `docs/PROGRESS.md` explicitly attributed |
 | **ADMISSION_INVENTORY_RECEIPT** | repository=`C:\Users\安\WorkBuddy\Worktrees\McDonald\main-eb4c1909\mcd-txt-order`；bindings=Main(master, 控制文档/脚本接入), A2 Worker(codex/s10-address-book, 地址簿源码/专用检查), A2 repair Worker(新鲜候选，仅 `src/domain/addressBook.ts`/`src/mcp/gateway.ts`)；worktrees=上述 original + candidate，两者 base/HEAD=`32a235c`；Main 新增归属 `docs/PROGRESS.md`；shared-resources=忽略的旧 `.cache`/凭据/数据库禁止访问，验证使用独立临时数据库；inventory=COMPLETE；unknown=runtime model/reasoning 无字段回执，UNVERIFIED；timestamp=2026-10-12 |
 | **SOURCE_ANCHOR** | `TASKS.md §S10` |
 | **OWNED_PATHS / RESOURCES** | `src/domain/`、`src/channel/core.ts`、`src/mcp/`、`src/safety/`、`config/`、`fixtures/`、`scripts/`、`docs/` |
@@ -419,7 +419,7 @@
 | **S10-A2_PENDING_BOUNDARIES** | A2 验收条件已满足；下一步为 A3 会话与候选选择。生产启用仍受 S9-A4/A7、T17、真实微信与目标机 Gate 约束；本轮不做真实部署 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
-| **CLEAN_RECONCILIATION** | Main original worktree=`CLEAN` after local integration commit; candidate `s10-a2-mcd-txt-order` retained as recovery snapshot at base `32a235c` until explicit cleanup; origin/master remains `c74c141`; no push |
+| **CLEAN_RECONCILIATION** | Main original worktree=`CLEAN` at HEAD `5efd535`; candidate `s10-a2-mcd-txt-order` retained as recovery snapshot at base `32a235c` with dirty paths; origin/master remains `c74c141`; no push |
 | **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### S10 子任务编排
