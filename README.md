@@ -297,10 +297,6 @@ src/
 | M3 | 下单编排 + 会话核心 + CLI 入口 | ✅ 36 项自检通过（含真实链路） |
 | M4 | 渠道层（模拟器 / 验签 / XML / 5 秒异步 / 去重） | ✅ 74 项自检通过 |
 | M5 | 参赛文件 | ✅ README / CONTEST_DECLARATION / MCP_INTEGRATION / workbuddy.md 已备齐 |
-| M6 | 发布报名 | 🟨 仓库现已公开；Issue #361 曾提交但官方审核未通过，需重新提交 |
-| M7 | 冲榜物料 | ✅ 首屏演示图、接入手册、技术要点长文、礼节门禁 |
-| M8 | 生产上线 | ⛔ 消息加解密 + 路由隔离 + 部署产物 + 上线手册已完成；真实公网下单仍受 S9 Gate 阻塞 |
-
 > 本仓库是「麦当劳程序员节创意开发大赛」参赛作品。提交 `CONTEST_DECLARATION.md` / `MCP_INTEGRATION.md` 等文件均按要求放置。
 
 ## License
