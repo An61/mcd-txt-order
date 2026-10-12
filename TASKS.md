@@ -428,7 +428,7 @@
 | **S10-A7_FINAL_BOUNDARIES** | A4~A6 验收条件已满足，A7 独立复核已 PASS，S10 已完成本地证据收口。生产启用仍受 S9-A4/A7、T17、真实微信与目标机 Gate 约束 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
-| **CLEAN_RECONCILIATION** | checkpoint=`58f403c`；当前 tracked tree 已清洁；仅 untracked `docs/normal-successor-continuation-plan.md` 为既有 successor 恢复包，保留原位；A2 candidate `s10-a2-mcd-txt-order` 保留；origin/master=`c74c141`；未 push、未 cleanup |
+| **CLEAN_RECONCILIATION** | checkpoint=`58f403c` 已推送到 `origin/master`；当前 tracked tree 已清洁；仅 untracked `docs/normal-successor-continuation-plan.md` 为既有 successor 恢复包，保留原位；A2 candidate `s10-a2-mcd-txt-order` 保留；未 cleanup |
 | **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### S10 子任务编排
