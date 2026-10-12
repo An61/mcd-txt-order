@@ -419,7 +419,7 @@
 | **S10-A2_PENDING_BOUNDARIES** | A2 验收条件已满足；下一步为 A3 会话与候选选择。生产启用仍受 S9-A4/A7、T17、真实微信与目标机 Gate 约束；本轮不做真实部署 |
 | **BLOCKED_BY** | 生产启用：S9-A4/A7、T17、真实微信与目标机验收；本地离线实现不受这些外部 Gate 阻塞 |
 | **EVIDENCE_CEILING** | 本地代码、离线夹具、自检、静态配置和只读 MCP 证据；不能据此宣称真实支付、真实地址可用性或公网生产就绪 |
-| **CLEAN_RECONCILIATION** | Main original worktree=`CLEAN` at HEAD `5efd535`; candidate `s10-a2-mcd-txt-order` retained as recovery snapshot at base `32a235c` with dirty paths; origin/master remains `c74c141`; no push |
+| **CLEAN_RECONCILIATION** | Main original worktree=`CLEAN` after local S10-A2 integration/doc commits; candidate `s10-a2-mcd-txt-order` retained as recovery snapshot at base `32a235c` with dirty paths; origin/master remains `c74c141`; no push |
 | **UPDATED_AT** | 2026-10-12（Asia/Shanghai） |
 
 ### S10 子任务编排
