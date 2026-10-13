@@ -63,7 +63,7 @@ node --experimental-strip-types scripts/check-m2.ts   # 安全与会话自检（
 
 ```bash
 cp .env.example .env
-# 编辑 .env，把 MCD_MCP_TOKEN 填进去
+# 编辑 .env，填入 MCD_MCP_TOKEN、PROBE_CITY、PROBE_KEYWORD；后三项齐备才会执行 M3 真实只读链路
 ```
 
 `.env` 已被 `.gitignore` 排除，**永远不会进仓库**。
@@ -294,7 +294,7 @@ src/
 | M0 | MCP 客户端、鉴权、探针 | ✅ |
 | M1 | 领域内核（匹配、数量、营养、示例数据） | ✅ 60 项自检通过 |
 | M2 | 安全红线与会话状态机 | ✅ 83 项自检通过 |
-| M3 | 下单编排 + 会话核心 + CLI 入口 | ✅ 36 项自检通过（含真实链路） |
+| M3 | 下单编排 + 会话核心 + CLI 入口 | ✅ 27 项离线自检；配置真实探针后 36 项（含真实只读链路） |
 | M4 | 渠道层（模拟器 / 验签 / XML / 5 秒异步 / 去重） | ✅ 74 项自检通过 |
 | M5 | 参赛文件 | ✅ README / CONTEST_DECLARATION / MCP_INTEGRATION / workbuddy.md 已备齐 |
 > 本仓库是「麦当劳程序员节创意开发大赛」参赛作品。提交 `CONTEST_DECLARATION.md` / `MCP_INTEGRATION.md` 等文件均按要求放置。

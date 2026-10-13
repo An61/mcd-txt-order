@@ -8,6 +8,7 @@
  *  - **有 Token 时额外验证真实链路**：门店检索 → 菜单 → 详情 → 算价，**全程只读**，
  *    绝不触碰 create-order。`payableCents > 0` 与 `takeWayCode` 非空是关键断言 ——
  *    这两项是 T15 / T16 的硬验收点，也是整条链路最容易悄悄坏掉的地方。
+ *  - **有 Token 却缺探针参数时直接失败**：不能把真实链路配置错误伪装成离线通过。
  */
 
 import { loadDotEnv } from '../src/env.ts';
@@ -84,6 +85,11 @@ const HAS_TOKEN = Boolean(process.env.MCD_MCP_TOKEN?.trim());
 const REAL_CITY = process.env.PROBE_CITY?.trim() ?? '';
 const REAL_KEYWORD = process.env.PROBE_KEYWORD?.trim() ?? '';
 const REAL_READY = HAS_TOKEN && REAL_CITY.length > 0 && REAL_KEYWORD.length > 0;
+const REAL_CONFIG_INCOMPLETE = HAS_TOKEN && !REAL_READY;
+const REAL_CONFIG_MISSING = [
+  !REAL_CITY ? 'PROBE_CITY' : '',
+  !REAL_KEYWORD ? 'PROBE_KEYWORD' : '',
+].filter(Boolean);
 const favorites = loadFavorites().config;
 
 // ═════════════════════════════════════════════════════════════
@@ -391,13 +397,23 @@ if (REAL_READY) {
   }
 } else {
   section('真实链路');
-  console.log('  ℹ️  未配置 MCD_MCP_TOKEN、PROBE_CITY、PROBE_KEYWORD，跳过真实链路验证（不会把合成门店用于真实服务）。');
+  if (REAL_CONFIG_INCOMPLETE) {
+    check(
+      '真实链路探针配置完整',
+      false,
+      `MCD_MCP_TOKEN 已配置，但缺少 ${REAL_CONFIG_MISSING.join('、')}；请在 .env 或 CI 中补齐。`,
+    );
+  } else {
+    console.log('  ℹ️  未配置 MCD_MCP_TOKEN，跳过真实链路验证（不会把合成门店用于真实服务）。');
+  }
 }
 
 // ═════════════════════════════════════════════════════════════
 console.log(`\n${'═'.repeat(50)}`);
 console.log(
-  `M3 自检：通过 ${passed} 项，失败 ${failed} 项，跳过 ${skipped} 项${REAL_READY ? '（含真实链路）' : '（离线）'}`,
+  `M3 自检：通过 ${passed} 项，失败 ${failed} 项，跳过 ${skipped} 项${
+    REAL_READY ? '（含真实链路）' : REAL_CONFIG_INCOMPLETE ? '（真实链路配置不完整）' : '（离线）'
+  }`,
 );
 console.log('═'.repeat(50));
 
